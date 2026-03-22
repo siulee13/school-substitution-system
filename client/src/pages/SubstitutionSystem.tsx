@@ -102,7 +102,13 @@ export default function SubstitutionSystem() {
   );
 
   // 第三步：使用 generateSuggestionsMulti 查詢所有老師的代課建議
-  const validTeachers = absentTeachers.filter(t => t.fullName);
+  // 穩定化 validTeachers，避免每次 render 產生新陣列引用
+  const validTeachers = useMemo(
+    () => absentTeachers.filter(t => t.fullName),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(absentTeachers)]
+  );
+
   const multiSuggestionsInput = useMemo(() => ({
     dateStr: localDateStr,
     absentTeachers: validTeachers.map(t => ({
@@ -111,18 +117,21 @@ export default function SubstitutionSystem() {
       ...(t.absenceType === 'partial' && t.endTime ? { endTime: t.endTime } : {}),
     })),
     allowSwap,
-  }), [localDateStr, JSON.stringify(validTeachers), allowSwap]);
+  }), [localDateStr, validTeachers, allowSwap]);
 
-  const { data: multiSuggestions, isLoading: multiSuggestionsLoading } =
+  const { data: multiSuggestions, isLoading: multiSuggestionsLoading, isFetching: multiSuggestionsFetching } =
     trpc.substitution.generateSuggestionsMulti.useQuery(
       multiSuggestionsInput,
       {
         enabled: step === 'substitution' && validTeachers.length > 0 && !!selectedDate,
+        staleTime: 0,
       }
     );
 
   // 當前編排老師的建議
   const currentSubstTeacher = absentTeachers[substitutionTeacherIdx];
+  // isLoading 或 isFetching 時視為載入中，避免閃現「無法載入」
+  const isSuggestionsLoading = multiSuggestionsLoading || multiSuggestionsFetching || !multiSuggestions;
   const currentSuggestions = multiSuggestions?.find(
     r => r.teacherFullName === currentSubstTeacher?.fullName
   )?.suggestions || [];
@@ -620,7 +629,7 @@ export default function SubstitutionSystem() {
               absentTeacher={currentSubstTeacher.fullName}
               date={selectedDate || new Date()}
               suggestions={currentSuggestions}
-              isLoading={multiSuggestionsLoading}
+              isLoading={isSuggestionsLoading}
               onConfirm={handleCompleteSubstitutionForTeacher}
               onBack={() => {
                 if (substitutionTeacherIdx > 0) {
