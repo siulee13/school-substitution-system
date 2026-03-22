@@ -3,7 +3,7 @@ import { zhTW } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronLeft, ChevronRight, Loader2, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Clock, ArrowLeftRight } from 'lucide-react';
 
 interface ClassConfirmationProps {
   teacher: string;
@@ -13,6 +13,7 @@ interface ClassConfirmationProps {
   absenceType?: 'fullday' | 'partial';
   startTime?: string;
   endTime?: string;
+  allowSwap?: boolean;
   onConfirm: () => void;
   onBack: () => void;
 }
@@ -25,6 +26,7 @@ export default function ClassConfirmation({
   absenceType = 'fullday',
   startTime,
   endTime,
+  allowSwap = false,
   onConfirm,
   onBack,
 }: ClassConfirmationProps) {
@@ -48,6 +50,12 @@ export default function ClassConfirmation({
           <Clock className="h-4 w-4 flex-shrink-0" />
           <span><strong>{teacher}</strong> — {absenceSummary}</span>
         </div>
+        {allowSwap && (
+          <div className="flex items-center gap-2 p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm text-purple-800">
+            <ArrowLeftRight className="h-4 w-4 flex-shrink-0 text-purple-600" />
+            <span>已開啟「容許調課」：系統將在下一步列出可調課的建議方案。</span>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex items-center justify-center py-8">

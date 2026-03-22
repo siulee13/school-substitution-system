@@ -7,10 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarIcon, ChevronRight, Loader2, Clock } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { CalendarIcon, ChevronRight, Loader2, Clock, ArrowLeftRight } from 'lucide-react';
 import ClassConfirmation from '@/components/ClassConfirmation';
-import SubstitutionSelection from '@/components/SubstitutionSelection';
-import SubstitutionReport from '@/components/SubstitutionReport';
+import SubstitutionSelection, { decodeSwapValue } from '@/components/SubstitutionSelection';
+import SubstitutionReport, { type ReportRow } from '@/components/SubstitutionReport';
 
 type WorkflowStep = 'input' | 'confirmation' | 'substitution' | 'report';
 type AbsenceType = 'fullday' | 'partial';
@@ -44,8 +45,8 @@ export default function SubstitutionSystem() {
   const [absenceType, setAbsenceType] = useState<AbsenceType>('fullday');
   const [startTime, setStartTime] = useState<string>('');
   const [endTime, setEndTime] = useState<string>('');
-  const [substitutionData, setSubstitutionData] = useState<any>(null);
-  const [finalReport, setFinalReport] = useState<any>(null);
+  const [allowSwap, setAllowSwap] = useState<boolean>(false);
+  const [finalReport, setFinalReport] = useState<ReportRow[]>([]);
 
   // 查詢所有老師
   const { data: teachers = [], isLoading: teachersLoading } = trpc.substitution.getAllTeachers.useQuery();
@@ -61,12 +62,13 @@ export default function SubstitutionSystem() {
     }
   );
 
-  // 查詢代課建議（支援時段篩選）
+  // 查詢代課建議（支援時段篩選及調課）
   const suggestionsInput = {
     dateStr: (selectedDate || new Date()).toISOString(),
     absentTeacherFullName: selectedTeacher,
     ...(absenceType === 'partial' && startTime ? { startTime } : {}),
     ...(absenceType === 'partial' && endTime ? { endTime } : {}),
+    allowSwap,
   };
 
   const { data: suggestions, isLoading: suggestionsLoading } =
@@ -89,25 +91,33 @@ export default function SubstitutionSystem() {
 
   const handleConfirmClasses = () => {
     if (selectedDate && selectedTeacher) {
-      setSubstitutionData({
-        date: selectedDate,
-        teacher: selectedTeacher,
-        classes: classesByDate,
-      });
       setStep('substitution');
     }
   };
 
   const handleCompleteSubstitution = (selections: Record<number, string>) => {
-    const report = suggestions
-      ?.map((suggestion, idx) => ({
-        timeSlot: suggestion.timeSlot,
-        class: suggestion.className,
-        subject: suggestion.subject,
-        substitutionTeacher: selections[idx] === 'none' ? '無需代課' : (selections[idx] || '未選擇'),
-      }))
-      .filter(item => item.substitutionTeacher !== '未選擇') || [];
-    
+    if (!suggestions) return;
+    const report: ReportRow[] = suggestions
+      .map((suggestion, idx) => {
+        const value = selections[idx];
+        if (!value) return null;
+        const swapInfo = decodeSwapValue(value);
+        if (swapInfo.isSwap) {
+          return {
+            timeSlot: suggestion.timeSlot,
+            class: suggestion.className,
+            subject: suggestion.subject,
+            substitutionTeacher: swapInfo.swapTeacherFullName || '',
+            isSwap: true,
+            swapNote: `${selectedTeacher} 於 ${swapInfo.swapTeacherTimeSlot} 先代 ${swapInfo.swapTeacherClassName} ${swapInfo.swapTeacherSubject}`,
+          } as ReportRow;
+        }
+        if (value === 'none') {
+          return { timeSlot: suggestion.timeSlot, class: suggestion.className, subject: suggestion.subject, substitutionTeacher: '無需代課', isSwap: false } as ReportRow;
+        }
+        return { timeSlot: suggestion.timeSlot, class: suggestion.className, subject: suggestion.subject, substitutionTeacher: value, isSwap: false } as ReportRow;
+      })
+      .filter((item): item is ReportRow => item !== null);
     setFinalReport(report);
     setStep('report');
   };
@@ -119,8 +129,8 @@ export default function SubstitutionSystem() {
     setAbsenceType('fullday');
     setStartTime('');
     setEndTime('');
-    setSubstitutionData(null);
-    setFinalReport(null);
+    setAllowSwap(false);
+    setFinalReport([]);
   };
 
   // 判斷是否可以繼續下一步
@@ -263,7 +273,7 @@ export default function SubstitutionSystem() {
                 </div>
 
                 {/* 指定時段：開始/結束時間 */}
-                {absenceType === 'partial' && (
+                {absenceType === 'partial' && (  
                   <div className="flex gap-3 items-center p-4 bg-blue-50 rounded-lg border border-blue-200">
                     <div className="flex-1">
                       <label className="block text-xs font-medium text-gray-600 mb-1">開始時間</label>
@@ -294,6 +304,33 @@ export default function SubstitutionSystem() {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* 容許調課選項 */}
+              <div>
+                <label
+                  className={`flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors ${
+                    allowSwap ? 'border-purple-400 bg-purple-50' : 'border-gray-200 hover:border-gray-300 bg-white'
+                  }`}
+                >
+                  <Checkbox
+                    id="allowSwap"
+                    checked={allowSwap}
+                    onCheckedChange={(checked) => setAllowSwap(checked === true)}
+                    className="mt-0.5 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <ArrowLeftRight className="h-4 w-4 text-purple-600" />
+                      <span className="font-medium text-gray-900">容許調課</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      系統會檢查同日是否有其他老師可與請假老師互換課堂，
+                      並優先推薦調課方案（請假老師在請假前先代另一老師的課，
+                      該老師再代請假老師的課）。
+                    </p>
+                  </div>
+                </label>
               </div>
 
               {/* 老師選擇平面清單 */}
@@ -347,6 +384,7 @@ export default function SubstitutionSystem() {
                   {format(selectedDate, 'yyyy年MM月dd日 (EEEE)', { locale: zhTW })}，
                   {selectedTeacher} 老師，
                   {absenceSummary}
+                  {allowSwap && <span className="ml-2 text-purple-700 font-medium">（已開啟調課）</span>}
                 </div>
               )}
 
@@ -375,6 +413,7 @@ export default function SubstitutionSystem() {
             absenceType={absenceType}
             startTime={startTime}
             endTime={endTime}
+            allowSwap={allowSwap}
             onConfirm={handleConfirmClasses}
             onBack={() => setStep('input')}
           />
@@ -391,7 +430,7 @@ export default function SubstitutionSystem() {
           />
         )}
 
-        {step === 'report' && finalReport && (
+        {step === 'report' && finalReport.length > 0 && (
           <SubstitutionReport
             report={finalReport}
             onReset={handleReset}

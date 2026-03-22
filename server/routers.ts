@@ -59,11 +59,12 @@ export const appRouter = router({
           absentTeacherFullName: z.string(),
           startTime: z.string().optional(), // e.g. "9:05" for time range filter
           endTime: z.string().optional(),   // e.g. "13:05" for time range filter
+          allowSwap: z.boolean().optional(), // 容許調課
         })
       )
       .query(async ({ input }) => {
         const date = new Date(input.dateStr);
-        return await generateSuggestions(date, input.absentTeacherFullName, input.startTime, input.endTime);
+        return await generateSuggestions(date, input.absentTeacherFullName, input.startTime, input.endTime, input.allowSwap);
       }),
   }),
 });
