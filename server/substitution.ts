@@ -230,9 +230,9 @@ export interface SwapCandidate {
  * 2. 請假老師在 T1 是空堂
  * 3. A 老師在請假老師需要代課的時段 T2 是空堂
  * 4. T1 < T2（調課必須在請假時段之前）
- * 5. 科目對口（雙向）：
- *    - A 老師必須有教請假老師在 T2 要上的班別（C_absent）的科目
- *    - 請假老師必須有教 A 老師在 T1 要上的班別（C_A）的科目
+ * 5. 互教對方班別（雙向，不論科目）：
+ *    - A 老師在同日必須有教請假老師在 T2 要上的班別（C_absent）
+ *    - 請假老師在同日必須有教 A 老師在 T1 要上的班別（C_A）
  */
 async function findSwapCandidates(
   dayOfWeek: string,
@@ -244,24 +244,20 @@ async function findSwapCandidates(
   // 請假老師當日所有課堂的時段集合（用於判斷哪些時段是空堂）
   const absentTeacherBusySlots = new Set(absentClasses.map(c => c.timeSlot));
 
-  // 預先載入 subject_teacher_mappings，用於科目對口檢查
-  const mappings = loadSubjectTeacherMappings();
-
   /**
-   * 檢查 teacherFullName 是否有教 className 的任何科目
-   * （即在 subject_teacher_mappings 中，該班別的任一科目的老師符合）
+   * 檢查 teacherFullName 在同日是否有教 className 這一班（不論科目）
+   * 直接查詢時間表資料庫
    */
-  async function teacherTeachesClass(teacherFullName: string, className: string): Promise<boolean> {
-    const classMapping = mappings[className] || {};
-    const db2 = await getTeacherDb();
-    for (const [, shortName] of Object.entries(classMapping)) {
-      if (typeof shortName !== 'string') continue;
-      const result = db2.exec(
-        `SELECT full_name FROM teacher_names WHERE short_name = '${shortName.replace(/'/g, "''")}' AND full_name = '${teacherFullName.replace(/'/g, "''")}' LIMIT 1`
-      );
-      if (result && result.length > 0 && result[0].values.length > 0) return true;
-    }
-    return false;
+  function teacherTeachesClassOnDay(teacherFullName: string, className: string): boolean {
+    const result = db.exec(
+      `SELECT COUNT(*) FROM timetable 
+       WHERE Teacher = '${teacherFullName.replace(/'/g, "''")}' 
+         AND Day = '${dayOfWeek}' 
+         AND Content LIKE '${className.replace(/'/g, "''")} %'
+       LIMIT 1`
+    );
+    const count = result?.[0]?.values?.[0]?.[0] ?? 0;
+    return (count as number) > 0;
   }
 
   const candidates: SwapCandidate[] = [];
@@ -315,13 +311,13 @@ async function findSwapCandidates(
       const { className: otherClassName, subject: otherSubject } = parseClassAndSubject(otherContent);
       if (otherClassName === 'N/A') continue; // 跳過非班別課堂
 
-      // ── 科目對口檢查（雙向） ──
-      // 條件 A：A 老師必須有教請假老師在 T2 要上的班別（absentCls.className）的科目
-      const aTeachesAbsentClass = await teacherTeachesClass(otherTeacherName, absentCls.className);
+      // ── 互教對方班別檢查（雙向，不論科目） ──
+      // 條件 A：A 老師在同日必須有教請假老師在 T2 要上的班別（absentCls.className）
+      const aTeachesAbsentClass = teacherTeachesClassOnDay(otherTeacherName, absentCls.className);
       if (!aTeachesAbsentClass) continue;
 
-      // 條件 B：請假老師必須有教 A 老師在 T1 要上的班別（otherClassName）的科目
-      const absentTeachesAClass = await teacherTeachesClass(absentTeacherFullName, otherClassName);
+      // 條件 B：請假老師在同日必須有教 A 老師在 T1 要上的班別（otherClassName）
+      const absentTeachesAClass = teacherTeachesClassOnDay(absentTeacherFullName, otherClassName);
       if (!absentTeachesAClass) continue;
 
       // 避免重複：同一 (swapTeacher, swapTimeSlot, absentTimeSlot) 組合只記錄一次
