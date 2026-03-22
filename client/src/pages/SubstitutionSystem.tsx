@@ -40,7 +40,18 @@ const TIME_SLOTS = [
 
 export default function SubstitutionSystem() {
   const [step, setStep] = useState<WorkflowStep>('input');
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+
+  // 計算下一個工作日（週一至週五）作為預設日期
+  const getNextWeekday = () => {
+    const d = new Date();
+    const day = d.getDay();
+    // 如果是週六（day=6）加 2 天，週日（day=0）加 1 天，其他保持當天
+    if (day === 6) d.setDate(d.getDate() + 2);
+    else if (day === 0) d.setDate(d.getDate() + 1);
+    return d;
+  };
+
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => getNextWeekday());
   const [selectedTeacher, setSelectedTeacher] = useState<string>('');
   const [absenceType, setAbsenceType] = useState<AbsenceType>('fullday');
   const [startTime, setStartTime] = useState<string>('');
@@ -129,7 +140,7 @@ export default function SubstitutionSystem() {
 
   const handleReset = () => {
     setStep('input');
-    setSelectedDate(new Date());
+    setSelectedDate(getNextWeekday());
     setSelectedTeacher('');
     setAbsenceType('fullday');
     setStartTime('');
@@ -234,10 +245,15 @@ export default function SubstitutionSystem() {
                       mode="single"
                       selected={selectedDate}
                       onSelect={setSelectedDate}
-                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                      disabled={(date) => {
+                        const day = date.getDay();
+                        // 禁止選擇週末（週六=6, 週日=0）
+                        return day === 0 || day === 6;
+                      }}
                     />
                   </PopoverContent>
                 </Popover>
+                <p className="text-xs text-gray-500 mt-1">只能選擇週一至週五（學校工作日）</p>
               </div>
 
               {/* 請假時段選擇 */}
