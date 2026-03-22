@@ -129,7 +129,8 @@ export default function SubstitutionSystem() {
     );
 
   // 當前編排老師的建議
-  const currentSubstTeacher = absentTeachers[substitutionTeacherIdx];
+  // 注意：第三步導航用 validTeachers 索引，確保與 multiSuggestions 的順序一致
+  const currentSubstTeacher = validTeachers[substitutionTeacherIdx];
   // isLoading 或 isFetching 時視為載入中，避免閃現「無法載入」
   const isSuggestionsLoading = multiSuggestionsLoading || multiSuggestionsFetching || !multiSuggestions;
   const currentSuggestions = multiSuggestions?.find(
@@ -179,15 +180,15 @@ export default function SubstitutionSystem() {
     const newAllSelections = { ...allSelections, [substitutionTeacherIdx]: selections };
     setAllSelections(newAllSelections);
 
-    if (substitutionTeacherIdx < absentTeachers.length - 1) {
+    if (substitutionTeacherIdx < validTeachers.length - 1) {
       // 還有下一位老師
       setSubstitutionTeacherIdx(substitutionTeacherIdx + 1);
     } else {
       // 所有老師都完成，生成最終報告
       const report: ReportRow[] = [];
-      const isMulti = absentTeachers.length > 1;
+      const isMulti = validTeachers.length > 1;
 
-      absentTeachers.forEach((teacher, tIdx) => {
+      validTeachers.forEach((teacher, tIdx) => {
         const teacherSuggestions = multiSuggestions?.find(
           r => r.teacherFullName === teacher.fullName
         )?.suggestions || [];
@@ -249,7 +250,7 @@ export default function SubstitutionSystem() {
     t.fullName && (t.absenceType === 'fullday' || (t.startTime && t.endTime))
   );
 
-  const isMultiTeacher = absentTeachers.length > 1;
+  const isMultiTeacher = validTeachers.length > 1;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4 md:p-8">
@@ -614,9 +615,9 @@ export default function SubstitutionSystem() {
           <div className="space-y-3">
             {isMultiTeacher && (
               <div className="flex items-center justify-between bg-white rounded-lg px-4 py-2 border border-gray-200 text-sm text-gray-600">
-                <span>編排代課：第 {substitutionTeacherIdx + 1} / {absentTeachers.length} 位老師</span>
+                <span>編排代課：第 {substitutionTeacherIdx + 1} / {validTeachers.length} 位老師</span>
                 <div className="flex gap-1">
-                  {absentTeachers.map((t, i) => (
+                  {validTeachers.map((t, i) => (
                     <div
                       key={t.id}
                       className={`w-2 h-2 rounded-full ${allSelections[i] ? 'bg-green-500' : i === substitutionTeacherIdx ? 'bg-blue-500' : 'bg-gray-300'}`}
