@@ -226,10 +226,13 @@ export interface SwapCandidate {
 /**
  * 尋找可調課的候選方案：
  * 條件：
- * 1. A 老師在某時段 T1 上某班 C 的課
+ * 1. A 老師在某時段 T1 上某班 C_A 的課
  * 2. 請假老師在 T1 是空堂
  * 3. A 老師在請假老師需要代課的時段 T2 是空堂
  * 4. T1 < T2（調課必須在請假時段之前）
+ * 5. 科目對口（雙向）：
+ *    - A 老師必須有教請假老師在 T2 要上的班別（C_absent）的科目
+ *    - 請假老師必須有教 A 老師在 T1 要上的班別（C_A）的科目
  */
 async function findSwapCandidates(
   dayOfWeek: string,
@@ -241,7 +244,26 @@ async function findSwapCandidates(
   // 請假老師當日所有課堂的時段集合（用於判斷哪些時段是空堂）
   const absentTeacherBusySlots = new Set(absentClasses.map(c => c.timeSlot));
 
-  // 請假老師需要代課的時段（即 absentClasses 中的時段）
+  // 預先載入 subject_teacher_mappings，用於科目對口檢查
+  const mappings = loadSubjectTeacherMappings();
+
+  /**
+   * 檢查 teacherFullName 是否有教 className 的任何科目
+   * （即在 subject_teacher_mappings 中，該班別的任一科目的老師符合）
+   */
+  async function teacherTeachesClass(teacherFullName: string, className: string): Promise<boolean> {
+    const classMapping = mappings[className] || {};
+    const db2 = await getTeacherDb();
+    for (const [, shortName] of Object.entries(classMapping)) {
+      if (typeof shortName !== 'string') continue;
+      const result = db2.exec(
+        `SELECT full_name FROM teacher_names WHERE short_name = '${shortName.replace(/'/g, "''")}' AND full_name = '${teacherFullName.replace(/'/g, "''")}' LIMIT 1`
+      );
+      if (result && result.length > 0 && result[0].values.length > 0) return true;
+    }
+    return false;
+  }
+
   const candidates: SwapCandidate[] = [];
 
   for (const absentCls of absentClasses) {
@@ -292,6 +314,15 @@ async function findSwapCandidates(
 
       const { className: otherClassName, subject: otherSubject } = parseClassAndSubject(otherContent);
       if (otherClassName === 'N/A') continue; // 跳過非班別課堂
+
+      // ── 科目對口檢查（雙向） ──
+      // 條件 A：A 老師必須有教請假老師在 T2 要上的班別（absentCls.className）的科目
+      const aTeachesAbsentClass = await teacherTeachesClass(otherTeacherName, absentCls.className);
+      if (!aTeachesAbsentClass) continue;
+
+      // 條件 B：請假老師必須有教 A 老師在 T1 要上的班別（otherClassName）的科目
+      const absentTeachesAClass = await teacherTeachesClass(absentTeacherFullName, otherClassName);
+      if (!absentTeachesAClass) continue;
 
       // 避免重複：同一 (swapTeacher, swapTimeSlot, absentTimeSlot) 組合只記錄一次
       const alreadyExists = candidates.some(

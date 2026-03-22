@@ -132,6 +132,63 @@ describe('isSlotInRange', () => {
   });
 });
 
+describe('teacherTeachesClass logic (subject matching)', () => {
+  it('should correctly identify subject match using mappings', () => {
+    // 模擬 subject_teacher_mappings 結構
+    const mockMappings: Record<string, Record<string, string>> = {
+      '4A': { '數學': '陳大', '英文': '李弘' },
+      '3B': { '數學': '王瑜', '中文': '李弘' },
+    };
+
+    // 模擬 teacherTeachesClass 逻輯（同步版本）
+    function teacherTeachesClassSync(teacherShortName: string, className: string): boolean {
+      const classMapping = mockMappings[className] || {};
+      return Object.values(classMapping).includes(teacherShortName);
+    }
+
+    // 陳大 有教 4A 數學 → 應該返回 true
+    expect(teacherTeachesClassSync('陳大', '4A')).toBe(true);
+    // 李弘 有教 4A 英文 → 應該返回 true
+    expect(teacherTeachesClassSync('李弘', '4A')).toBe(true);
+    // 李弘 有教 3B 中文 → 應該返回 true
+    expect(teacherTeachesClassSync('李弘', '3B')).toBe(true);
+    // 陳大 沒有教 3B 任何科目 → 應該返回 false
+    expect(teacherTeachesClassSync('陳大', '3B')).toBe(false);
+    // 王瑜 沒有教 4A 任何科目 → 應該返回 false
+    expect(teacherTeachesClassSync('王瑜', '4A')).toBe(false);
+    // 不存在的班別 → 應該返回 false
+    expect(teacherTeachesClassSync('陳大', '9Z')).toBe(false);
+  });
+
+  it('should require BOTH directions for swap to be valid', () => {
+    const mockMappings: Record<string, Record<string, string>> = {
+      '4A': { '數學': '陳大', '英文': '李弘' },
+      '3B': { '數學': '王瑜', '中文': '李弘' },
+    };
+
+    function teacherTeachesClassSync(teacherShortName: string, className: string): boolean {
+      const classMapping = mockMappings[className] || {};
+      return Object.values(classMapping).includes(teacherShortName);
+    }
+
+    // 情境：請假老師李弘在 4A 有課，A 老師陳大在 3B 有課
+    // 條件 A：陳大有教 4A 數學 → true
+    const aTeachesAbsentClass = teacherTeachesClassSync('陳大', '4A');
+    // 條件 B：李弘有教 3B 中文 → true
+    const absentTeachesAClass = teacherTeachesClassSync('李弘', '3B');
+    // 雙向都满足 → 可調課
+    expect(aTeachesAbsentClass && absentTeachesAClass).toBe(true);
+
+    // 情境：請假老師李弘在 4A 有課，A 老師王瑜在 3B 有課
+    // 條件 A：王瑜有教 4A 數學 → false（王瑜只教 3B）
+    const aTeachesAbsentClass2 = teacherTeachesClassSync('王瑜', '4A');
+    // 條件 B：李弘有教 3B 中文 → true
+    const absentTeachesAClass2 = teacherTeachesClassSync('李弘', '3B');
+    // 條件 A 不满足 → 不可調課
+    expect(aTeachesAbsentClass2 && absentTeachesAClass2).toBe(false);
+  });
+});
+
 describe('swap candidate logic validation', () => {
   it('should correctly identify that swap requires earlier time slot', () => {
     // 調課邏輯：swapTeacherTimeSlot 必須在 absentTeacherTimeSlot 之前
