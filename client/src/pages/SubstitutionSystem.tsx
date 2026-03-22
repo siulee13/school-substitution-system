@@ -52,10 +52,15 @@ export default function SubstitutionSystem() {
   const { data: teachers = [], isLoading: teachersLoading } = trpc.substitution.getAllTeachers.useQuery();
 
   // 查詢該老師當日課堂
+  // 使用本地日期字串（YYYY-MM-DD），避免 toISOString() 時區偏差
+  const localDateStr = selectedDate
+    ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
+    : '';
+
   const { data: classesByDate, isLoading: classesLoading } = trpc.substitution.getTeacherClasses.useQuery(
     {
       teacherFullName: selectedTeacher,
-      dateStr: (selectedDate || new Date()).toISOString(),
+      dateStr: localDateStr,
     },
     {
       enabled: step === 'confirmation' && !!selectedTeacher && !!selectedDate,
@@ -64,7 +69,7 @@ export default function SubstitutionSystem() {
 
   // 查詢代課建議（支援時段篩選及調課）
   const suggestionsInput = {
-    dateStr: (selectedDate || new Date()).toISOString(),
+    dateStr: localDateStr,
     absentTeacherFullName: selectedTeacher,
     ...(absenceType === 'partial' && startTime ? { startTime } : {}),
     ...(absenceType === 'partial' && endTime ? { endTime } : {}),

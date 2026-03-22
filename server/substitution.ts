@@ -106,7 +106,7 @@ export async function getTeacherClassesByDate(
   teacherFullName: string,
   date: Date
 ): Promise<Array<{ timeSlot: string; className: string; subject: string }>> {
-  const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getUTCDay()];
+  const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
   const rows = await getTeacherClassesByDateRaw(teacherFullName, dayOfWeek);
   return rows.map(r => ({ timeSlot: r.timeSlot, className: r.className, subject: r.subject }));
 }
@@ -343,7 +343,7 @@ export async function generateSuggestions(
   allowSwap?: boolean
 ): Promise<SuggestionItem[]> {
   try {
-    const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getUTCDay()];
+    const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
 
     // 獲取請假老師當日全部課堂（用於調課偵測）
     const allClasses = await getTeacherClassesByDateRaw(absentTeacherFullName, dayOfWeek);

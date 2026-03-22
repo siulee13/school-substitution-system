@@ -21,8 +21,8 @@ describe('Substitution System', () => {
 
   describe('getTeacherClassesByDate', () => {
     it('should return classes for a specific teacher on a given date', async () => {
-      // 使用 UTC 日期 2026-03-23 (Monday)
-      const date = new Date('2026-03-23T00:00:00.000Z');
+      // 使用本地日期 2026-03-23 (Monday)—不使用 UTC 字串避免時區偏差
+      const date = new Date(2026, 2, 23); // month is 0-indexed
       const classes = await getTeacherClassesByDate('李弘光', date);
       expect(Array.isArray(classes)).toBe(true);
       if (classes.length > 0) {
@@ -35,7 +35,7 @@ describe('Substitution System', () => {
 
     it('should return empty array for a teacher with no classes on a weekend', async () => {
       // 2026-01-04 是星期日，不應有課堂
-      const date = new Date('2026-01-04T00:00:00.000Z');
+      const date = new Date(2026, 0, 4); // month is 0-indexed
       const classes = await getTeacherClassesByDate('李弘光', date);
       expect(Array.isArray(classes)).toBe(true);
     });

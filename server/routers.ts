@@ -40,7 +40,9 @@ export const appRouter = router({
         })
       )
       .query(async ({ input }) => {
-        const date = new Date(input.dateStr);
+        // 使用 YYYY-MM-DD 格式解析，避免 UTC 時區偏差
+        const [year, month, day] = input.dateStr.split('T')[0].split('-').map(Number);
+        const date = new Date(year, month - 1, day);
         return await getTeacherClassesByDate(input.teacherFullName, date);
       }),
 
@@ -63,7 +65,9 @@ export const appRouter = router({
         })
       )
       .query(async ({ input }) => {
-        const date = new Date(input.dateStr);
+        // 使用 YYYY-MM-DD 格式解析，避免 UTC 時區偏差
+        const [year, month, day] = input.dateStr.split('T')[0].split('-').map(Number);
+        const date = new Date(year, month - 1, day);
         return await generateSuggestions(date, input.absentTeacherFullName, input.startTime, input.endTime, input.allowSwap);
       }),
   }),
