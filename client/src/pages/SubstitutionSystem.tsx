@@ -63,7 +63,17 @@ export default function SubstitutionSystem() {
     }
   };
 
-  const handleCompleteSubstitution = (report: any) => {
+  const handleCompleteSubstitution = (selections: Record<number, string>) => {
+    // 將選擇轉換為報告格式
+    const report = suggestions
+      ?.map((suggestion, idx) => ({
+        timeSlot: suggestion.timeSlot,
+        class: suggestion.className,
+        subject: suggestion.subject,
+        substitutionTeacher: selections[idx] === 'none' ? '無需代課' : (selections[idx] || '未選擇'),
+      }))
+      .filter(item => item.substitutionTeacher !== '未選擇') || [];
+    
     setFinalReport(report);
     setStep('report');
   };
