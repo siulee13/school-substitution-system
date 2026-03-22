@@ -56,12 +56,17 @@
 - [x] 後端：findSwapCandidates 改為檢查「A 老師在同日有教 B 老師請假那班」且「B 老師在同日有教 A 老師那班」（不論科目），移除舊有科目對口限制
 
 ## 新功能：調課建議班別說明
-- [ ] 後端：SwapCandidate 加入 swapTeacherAllClasses / absentTeacherAllClasses 欄位（同日所有班別）
-- [ ] 前端：調課建議卡片顯示「A 老師同日教：X班、Y班」及「請假老師同日教：X班、Y班」
+- [x] 後端：SwapCandidate 加入 swapTeacherAllClasses / absentTeacherAllClasses 欄位（同日所有班別）
+- [x] 前端：調課建議卡片顯示「A 老師同日教：X班、Y班」及「請假老師同日教：X班、Y班」
 
 ## 新功能：多位老師同日請假
-- [ ] 後端：generateSuggestions tRPC procedure 支援多位老師（接受 absentTeachers 陣列）
-- [ ] 前端：第一步支援新增多位請假老師（加入「＋新增老師」按鈕）
-- [ ] 前端：第二步分別確認每位老師的課堂
-- [ ] 前端：第三步合並所有老師的代課選擇頁面
-- [ ] 前端：最終報告合並所有老師的代課總表
+- [x] 後端：generateSuggestions tRPC procedure 支援多位老師（接受 absentTeachers 陣列）
+- [x] 前端：第一步支援新增多位請假老師（加入「＋新增老師」按鈕）
+- [x] 前端：第二步分別確認每位老師的課堂
+- [x] 前端：第三步合並所有老師的代課選擇頁面
+- [x] 前端：最終報告合並所有老師的代課總表
+
+## 新功能：老師搜尋篩選
+- [x] 前端：老師選擇列表加入搜尋框，支援以全名或簡稱篩選
+- [x] 前端：搜尋框即時篩選，不需按確認
+- [x] 前端：無結果時顯示「找不到符合的老師」提示

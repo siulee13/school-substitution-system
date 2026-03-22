@@ -8,7 +8,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { CalendarIcon, ChevronRight, ChevronLeft, Loader2, Clock, ArrowLeftRight, Plus, X, Users } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { CalendarIcon, ChevronRight, ChevronLeft, Loader2, Clock, ArrowLeftRight, Plus, X, Users, Search } from 'lucide-react';
 import ClassConfirmation from '@/components/ClassConfirmation';
 import SubstitutionSelection, { decodeSwapValue } from '@/components/SubstitutionSelection';
 import SubstitutionReport, { type ReportRow } from '@/components/SubstitutionReport';
@@ -63,6 +64,9 @@ export default function SubstitutionSystem() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => getNextWeekday());
   const [allowSwap, setAllowSwap] = useState<boolean>(false);
   const [finalReport, setFinalReport] = useState<ReportRow[]>([]);
+
+  // 每位老師的搜尋關鍵字（key: entry.id）
+  const [teacherSearchMap, setTeacherSearchMap] = useState<Record<string, string>>({});
 
   // 多位請假老師列表
   const [absentTeachers, setAbsentTeachers] = useState<AbsentTeacherEntry[]>([
@@ -135,6 +139,11 @@ export default function SubstitutionSystem() {
   const removeTeacher = (id: string) => {
     if (absentTeachers.length <= 1) return;
     setAbsentTeachers(prev => prev.filter(t => t.id !== id));
+    setTeacherSearchMap(prev => { const next = { ...prev }; delete next[id]; return next; });
+  };
+
+  const updateTeacherSearch = (id: string, value: string) => {
+    setTeacherSearchMap(prev => ({ ...prev, [id]: value }));
   };
 
   const handleProceedToConfirmation = () => {
@@ -387,31 +396,60 @@ export default function SubstitutionSystem() {
                           <Loader2 className="h-4 w-4 animate-spin text-blue-600 mr-2" />
                           <span className="text-sm text-gray-600">載入老師列表中...</span>
                         </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
-                          {teachers.map((teacher) => (
-                            <label
-                              key={teacher.fullName}
-                              className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors text-sm ${
-                                entry.fullName === teacher.fullName
-                                  ? 'bg-blue-100 border border-blue-300'
-                                  : 'hover:bg-blue-50'
-                              }`}
-                            >
-                              <input
-                                type="radio"
-                                name={`teacher-${entry.id}`}
-                                value={teacher.fullName}
-                                checked={entry.fullName === teacher.fullName}
-                                onChange={(e) => updateTeacher(entry.id, 'fullName', e.target.value)}
-                                className="w-3.5 h-3.5 text-blue-600 cursor-pointer"
+                      ) : (() => {
+                        const searchQuery = (teacherSearchMap[entry.id] || '').trim().toLowerCase();
+                        const filteredTeachers = searchQuery
+                          ? teachers.filter(t =>
+                              t.fullName.toLowerCase().includes(searchQuery) ||
+                              t.shortName.toLowerCase().includes(searchQuery)
+                            )
+                          : teachers;
+                        return (
+                          <div className="space-y-2">
+                            {/* 搜尋框 */}
+                            <div className="relative">
+                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                              <Input
+                                type="text"
+                                placeholder="搜尋老師姓名或簡稱..."
+                                value={teacherSearchMap[entry.id] || ''}
+                                onChange={(e) => updateTeacherSearch(entry.id, e.target.value)}
+                                className="pl-8 h-8 text-sm bg-white"
                               />
-                              <span className="font-medium text-gray-900">{teacher.fullName}</span>
-                              <span className="text-gray-500">({teacher.shortName})</span>
-                            </label>
-                          ))}
-                        </div>
-                      )}
+                            </div>
+                            {/* 老師列表 */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
+                              {filteredTeachers.length === 0 ? (
+                                <div className="col-span-2 py-4 text-center text-sm text-gray-400">
+                                  找不到符合「{teacherSearchMap[entry.id]}」的老師
+                                </div>
+                              ) : (
+                                filteredTeachers.map((teacher) => (
+                                  <label
+                                    key={teacher.fullName}
+                                    className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors text-sm ${
+                                      entry.fullName === teacher.fullName
+                                        ? 'bg-blue-100 border border-blue-300'
+                                        : 'hover:bg-blue-50'
+                                    }`}
+                                  >
+                                    <input
+                                      type="radio"
+                                      name={`teacher-${entry.id}`}
+                                      value={teacher.fullName}
+                                      checked={entry.fullName === teacher.fullName}
+                                      onChange={(e) => updateTeacher(entry.id, 'fullName', e.target.value)}
+                                      className="w-3.5 h-3.5 text-blue-600 cursor-pointer"
+                                    />
+                                    <span className="font-medium text-gray-900">{teacher.fullName}</span>
+                                    <span className="text-gray-500">({teacher.shortName})</span>
+                                  </label>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* 請假時段 */}
                       <div>
