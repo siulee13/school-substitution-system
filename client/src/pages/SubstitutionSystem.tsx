@@ -1,22 +1,49 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
+import { zhTW } from 'date-fns/locale';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, ChevronRight, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CalendarIcon, ChevronRight, Loader2, Clock } from 'lucide-react';
 import ClassConfirmation from '@/components/ClassConfirmation';
 import SubstitutionSelection from '@/components/SubstitutionSelection';
 import SubstitutionReport from '@/components/SubstitutionReport';
 
 type WorkflowStep = 'input' | 'confirmation' | 'substitution' | 'report';
+type AbsenceType = 'fullday' | 'partial';
+
+// 所有課堂時間段（按順序排列）
+const TIME_SLOTS = [
+  { label: '07:45', value: '7:45' },
+  { label: '08:10', value: '8:10' },
+  { label: '08:30', value: '8:30' },
+  { label: '09:05', value: '9:05' },
+  { label: '09:40', value: '9:40' },
+  { label: '09:50', value: '9:50' },
+  { label: '10:25', value: '10:25' },
+  { label: '11:00', value: '11:00' },
+  { label: '11:20', value: '11:20' },
+  { label: '11:55', value: '11:55' },
+  { label: '12:30', value: '12:30' },
+  { label: '13:05', value: '13:05' },
+  { label: '13:35', value: '13:35' },
+  { label: '14:00', value: '14:00' },
+  { label: '14:30', value: '14:30' },
+  { label: '15:00', value: '15:00' },
+  { label: '15:05', value: '15:05' },
+  { label: '15:40', value: '15:40' },
+];
 
 export default function SubstitutionSystem() {
   const [step, setStep] = useState<WorkflowStep>('input');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedTeacher, setSelectedTeacher] = useState<string>('');
+  const [absenceType, setAbsenceType] = useState<AbsenceType>('fullday');
+  const [startTime, setStartTime] = useState<string>('');
+  const [endTime, setEndTime] = useState<string>('');
   const [substitutionData, setSubstitutionData] = useState<any>(null);
   const [finalReport, setFinalReport] = useState<any>(null);
 
@@ -34,13 +61,17 @@ export default function SubstitutionSystem() {
     }
   );
 
-  // 查詢代課建議
+  // 查詢代課建議（支援時段篩選）
+  const suggestionsInput = {
+    dateStr: (selectedDate || new Date()).toISOString(),
+    absentTeacherFullName: selectedTeacher,
+    ...(absenceType === 'partial' && startTime ? { startTime } : {}),
+    ...(absenceType === 'partial' && endTime ? { endTime } : {}),
+  };
+
   const { data: suggestions, isLoading: suggestionsLoading } =
     trpc.substitution.generateSuggestions.useQuery(
-      {
-        dateStr: (selectedDate || new Date()).toISOString(),
-        absentTeacherFullName: selectedTeacher,
-      },
+      suggestionsInput,
       {
         enabled: step === 'substitution' && !!selectedTeacher && !!selectedDate,
       }
@@ -48,6 +79,10 @@ export default function SubstitutionSystem() {
 
   const handleProceedToConfirmation = () => {
     if (selectedDate && selectedTeacher) {
+      // 如果是指定時段，驗證時間
+      if (absenceType === 'partial' && (!startTime || !endTime)) {
+        return;
+      }
       setStep('confirmation');
     }
   };
@@ -64,7 +99,6 @@ export default function SubstitutionSystem() {
   };
 
   const handleCompleteSubstitution = (selections: Record<number, string>) => {
-    // 將選擇轉換為報告格式
     const report = suggestions
       ?.map((suggestion, idx) => ({
         timeSlot: suggestion.timeSlot,
@@ -82,9 +116,33 @@ export default function SubstitutionSystem() {
     setStep('input');
     setSelectedDate(new Date());
     setSelectedTeacher('');
+    setAbsenceType('fullday');
+    setStartTime('');
+    setEndTime('');
     setSubstitutionData(null);
     setFinalReport(null);
   };
+
+  // 判斷是否可以繼續下一步
+  const canProceed = selectedDate && selectedTeacher && (
+    absenceType === 'fullday' || (absenceType === 'partial' && startTime && endTime)
+  );
+
+  // 過濾結束時間選項（必須在開始時間之後）
+  const filteredEndTimes = startTime
+    ? TIME_SLOTS.filter(t => {
+        const startMin = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
+        const tMin = parseInt(t.value.split(':')[0]) * 60 + parseInt(t.value.split(':')[1]);
+        return tMin > startMin;
+      })
+    : TIME_SLOTS;
+
+  // 顯示請假時段摘要
+  const absenceSummary = absenceType === 'fullday'
+    ? '全日'
+    : startTime && endTime
+      ? `${startTime} – ${endTime}`
+      : '指定時段（未完整填寫）';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4 md:p-8">
@@ -133,9 +191,9 @@ export default function SubstitutionSystem() {
         {step === 'input' && (
           <Card>
             <CardHeader>
-              <CardTitle>第一步：選擇日期和老師</CardTitle>
+              <CardTitle>第一步：選擇日期、老師及請假時段</CardTitle>
               <CardDescription>
-                請選擇請假日期和老師，系統將自動顯示該老師當日的課堂安排
+                請選擇請假日期、老師及請假時段，系統將自動顯示受影響的課堂安排
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -152,7 +210,7 @@ export default function SubstitutionSystem() {
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {selectedDate
-                        ? format(selectedDate, 'yyyy年MM月dd日 (EEEE)', { locale: zhCN })
+                        ? format(selectedDate, 'yyyy年MM月dd日 (EEEE)', { locale: zhTW })
                         : '選擇日期'}
                     </Button>
                   </PopoverTrigger>
@@ -165,6 +223,77 @@ export default function SubstitutionSystem() {
                     />
                   </PopoverContent>
                 </Popover>
+              </div>
+
+              {/* 請假時段選擇 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Clock className="inline-block mr-1 h-4 w-4" />
+                  請假時段 *
+                </label>
+                <div className="flex gap-3 mb-3">
+                  <label className={`flex-1 flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-colors ${absenceType === 'fullday' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input
+                      type="radio"
+                      name="absenceType"
+                      value="fullday"
+                      checked={absenceType === 'fullday'}
+                      onChange={() => { setAbsenceType('fullday'); setStartTime(''); setEndTime(''); }}
+                      className="w-4 h-4 text-blue-600"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">全日</div>
+                      <div className="text-xs text-gray-500">涵蓋當天所有課堂</div>
+                    </div>
+                  </label>
+                  <label className={`flex-1 flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-colors ${absenceType === 'partial' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input
+                      type="radio"
+                      name="absenceType"
+                      value="partial"
+                      checked={absenceType === 'partial'}
+                      onChange={() => setAbsenceType('partial')}
+                      className="w-4 h-4 text-blue-600"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">指定時段</div>
+                      <div className="text-xs text-gray-500">只涵蓋部分課堂</div>
+                    </div>
+                  </label>
+                </div>
+
+                {/* 指定時段：開始/結束時間 */}
+                {absenceType === 'partial' && (
+                  <div className="flex gap-3 items-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">開始時間</label>
+                      <Select value={startTime} onValueChange={(v) => { setStartTime(v); if (endTime && v >= endTime) setEndTime(''); }}>
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="選擇開始時間" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TIME_SLOTS.map(t => (
+                            <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="text-gray-400 mt-5">至</div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">結束時間</label>
+                      <Select value={endTime} onValueChange={setEndTime} disabled={!startTime}>
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="選擇結束時間" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {filteredEndTimes.map(t => (
+                            <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 老師選擇平面清單 */}
@@ -182,7 +311,11 @@ export default function SubstitutionSystem() {
                     {teachers.map((teacher) => (
                       <label
                         key={teacher.fullName}
-                        className="flex items-center space-x-3 p-3 rounded-lg hover:bg-blue-100 cursor-pointer transition-colors"
+                        className={`flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                          selectedTeacher === teacher.fullName
+                            ? 'bg-blue-100 border border-blue-300'
+                            : 'hover:bg-blue-50'
+                        }`}
                       >
                         <input
                           type="radio"
@@ -207,15 +340,28 @@ export default function SubstitutionSystem() {
                 )}
               </div>
 
+              {/* 選擇摘要 */}
+              {selectedDate && selectedTeacher && (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+                  <strong>已選擇：</strong>
+                  {format(selectedDate, 'yyyy年MM月dd日 (EEEE)', { locale: zhTW })}，
+                  {selectedTeacher} 老師，
+                  {absenceSummary}
+                </div>
+              )}
+
               {/* 確認按鈕 */}
               <Button
                 onClick={handleProceedToConfirmation}
-                disabled={!selectedDate || !selectedTeacher}
+                disabled={!canProceed}
                 className="w-full"
                 size="lg"
               >
                 下一步：確認課堂 <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
+              {absenceType === 'partial' && (!startTime || !endTime) && (
+                <p className="text-sm text-amber-600 text-center">請選擇完整的開始及結束時間</p>
+              )}
             </CardContent>
           </Card>
         )}
@@ -226,6 +372,9 @@ export default function SubstitutionSystem() {
             date={selectedDate}
             classes={classesByDate || []}
             isLoading={classesLoading}
+            absenceType={absenceType}
+            startTime={startTime}
+            endTime={endTime}
             onConfirm={handleConfirmClasses}
             onBack={() => setStep('input')}
           />

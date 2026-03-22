@@ -181,10 +181,40 @@ export async function getSubjectTeachersForClass(
   return getSubjectTeachersForClassInternal(className);
 }
 
+// 解析時間字串為分鐘數（支援 7:45 、 8:10、 9:05 等格式）
+function parseTimeToMinutes(timeStr: string): number {
+  const match = timeStr.trim().match(/(\d{1,2}):(\d{2})/);
+  if (match) {
+    return parseInt(match[1]) * 60 + parseInt(match[2]);
+  }
+  return 0;
+}
+
+// 判斷某一時段是否在指定時間範圍內
+function isSlotInRange(timeSlot: string, startTime?: string, endTime?: string): boolean {
+  if (!startTime && !endTime) return true; // 全日，不篩選
+  
+  // timeSlot 格式如 "9:05－ 9:40" 或 "7:45 - 8:10"
+  // 取開始時間和結束時間
+  const parts = timeSlot.split(/[-－]/);
+  if (parts.length < 2) return true;
+  
+  const slotStart = parseTimeToMinutes(parts[0]);
+  const slotEnd = parseTimeToMinutes(parts[parts.length - 1]);
+  
+  const rangeStart = startTime ? parseTimeToMinutes(startTime) : 0;
+  const rangeEnd = endTime ? parseTimeToMinutes(endTime) : 24 * 60;
+  
+  // 課堂時間與指定範圍有重疊（課堂開始在範圍結束前，且課堂結束在範圍開始後）
+  return slotStart < rangeEnd && slotEnd > rangeStart;
+}
+
 // 生成代課建議（核心邏輯）
 export async function generateSuggestions(
   date: Date,
-  absentTeacherFullName: string
+  absentTeacherFullName: string,
+  startTime?: string,
+  endTime?: string
 ): Promise<Array<{
   timeSlot: string;
   className: string;
@@ -203,6 +233,11 @@ export async function generateSuggestions(
     const suggestions = [];
     
     for (const cls of classes) {
+      // 如果指定時段，篩選出該時段內的課堂
+      if (!isSlotInRange(cls.timeSlot, startTime, endTime)) {
+        continue;
+      }
+      
       // 獲取該時段空堂老師（使用原始時間格式）
       const availableTeachers = await getAvailableTeachersForSlot(dayOfWeek, cls.timeSlot);
       console.log(`[Suggestions] ${cls.timeSlot} ${cls.className}: ${availableTeachers.length} available teachers`);

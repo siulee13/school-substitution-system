@@ -57,11 +57,13 @@ export const appRouter = router({
         z.object({
           dateStr: z.string(), // ISO date string e.g. "2026-03-30"
           absentTeacherFullName: z.string(),
+          startTime: z.string().optional(), // e.g. "9:05" for time range filter
+          endTime: z.string().optional(),   // e.g. "13:05" for time range filter
         })
       )
       .query(async ({ input }) => {
         const date = new Date(input.dateStr);
-        return await generateSuggestions(date, input.absentTeacherFullName);
+        return await generateSuggestions(date, input.absentTeacherFullName, input.startTime, input.endTime);
       }),
   }),
 });

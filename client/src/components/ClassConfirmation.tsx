@@ -1,15 +1,18 @@
 import { format } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
+import { zhTW } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Clock } from 'lucide-react';
 
 interface ClassConfirmationProps {
   teacher: string;
   date: Date;
   classes: Array<{ timeSlot: string; className: string; subject: string }>;
   isLoading: boolean;
+  absenceType?: 'fullday' | 'partial';
+  startTime?: string;
+  endTime?: string;
   onConfirm: () => void;
   onBack: () => void;
 }
@@ -19,21 +22,33 @@ export default function ClassConfirmation({
   date,
   classes,
   isLoading,
+  absenceType = 'fullday',
+  startTime,
+  endTime,
   onConfirm,
   onBack,
 }: ClassConfirmationProps) {
-  const dayOfWeek = format(date, 'EEEE', { locale: zhCN });
+  const dayOfWeek = format(date, 'EEEE', { locale: zhTW });
+
+  const absenceSummary = absenceType === 'fullday'
+    ? '全日請假'
+    : `指定時段請假（${startTime} – ${endTime}）`;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>第二步：確認課堂</CardTitle>
         <CardDescription>
-          請確認 {teacher} 在 {format(date, 'yyyy年MM月dd日', { locale: zhCN })} ({dayOfWeek})
-          的課堂安排
+          請確認 {teacher} 在 {format(date, 'yyyy年MM月dd日', { locale: zhTW })} ({dayOfWeek}) 的課堂安排
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* 請假時段摘要 */}
+        <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          <Clock className="h-4 w-4 flex-shrink-0" />
+          <span><strong>{teacher}</strong> — {absenceSummary}</span>
+        </div>
+
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
@@ -67,6 +82,9 @@ export default function ClassConfirmation({
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-sm text-blue-900">
                 共 <span className="font-semibold">{classes.length}</span> 節課需要安排代課
+                {absenceType === 'partial' && (
+                  <span className="text-blue-600 ml-1">（已根據指定時段篩選）</span>
+                )}
               </p>
             </div>
 
