@@ -71,31 +71,58 @@ export async function getAllTeachers(): Promise<Array<{ fullName: string; shortN
 }
 
 // 根據日期及老師查詢當日課堂
+function parseTimeForSorting(timeStr: string): number {
+  // 例如 "7:45 - 8:10" 或 "8:10－ 8:30" 或 "09:50－10:25"
+  const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+  if (match) {
+    return parseInt(match[1]) * 60 + parseInt(match[2]);
+  }
+  return 0;
+}
+
+function parseClassAndSubject(content: string): { className: string; subject: string } {
+  // 例如 "5A 體育 籃球場1" 或 "2B 體育 操基1" 或 "班主任課"
+  const classMatch = content.match(/^([1-6][A-F])\s+(.+)$/);
+  if (classMatch) {
+    const className = classMatch[1];
+    const rest = classMatch[2];
+    // 例如 "體育 籃球場1" 或 "體育 操基1"
+    const subjectMatch = rest.match(/^([^\s]+)/);
+    const subject = subjectMatch ? subjectMatch[1] : rest;
+    return { className, subject };
+  }
+  // 如果沒有班別，可能是特殊課程如 "班主任課"
+  return { className: 'N/A', subject: content };
+}
+
 export async function getTeacherClassesByDate(
   teacherFullName: string,
   date: Date
-): Promise<Array<{ timeSlot: string; class: string; subject: string; location?: string }>> {
+): Promise<Array<{ timeSlot: string; className: string; subject: string; location?: string }>> {
   try {
     const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
 
     const db = await getTeacherDb();
     const stmt = db.prepare(`
-      SELECT Time as timeSlot, Content as subject FROM timetable 
+      SELECT Time as timeSlot, Content as content FROM timetable 
       WHERE Teacher = ? AND Day = ?
-      ORDER BY Time
     `);
     stmt.bind([teacherFullName, dayOfWeek]);
-    const rows: Array<{ timeSlot: string; class: string; subject: string }> = [];
+    const rows: Array<{ timeSlot: string; className: string; subject: string }> = [];
     
     while (stmt.step()) {
       const row = stmt.getAsObject();
+      const { className, subject } = parseClassAndSubject(row.content as string);
       rows.push({
         timeSlot: row.timeSlot as string,
-        class: 'N/A',
-        subject: row.subject as string,
+        className,
+        subject,
       });
     }
     stmt.free();
+    
+    // 按時間排序
+    rows.sort((a, b) => parseTimeForSorting(a.timeSlot) - parseTimeForSorting(b.timeSlot));
     
     return rows;
   } catch (error) {
@@ -198,7 +225,7 @@ export async function generateSuggestions(
       const availableTeachers = await getAvailableTeachers(date, cls.timeSlot);
       
       // 獲取該班別科任老師
-      const subjectTeachers = await getSubjectTeachersForClass(cls.class);
+      const subjectTeachers = await getSubjectTeachersForClass(cls.className);
       
       // 篩選優先老師（科任老師中的空堂老師）
       const priorityTeachers = availableTeachers.filter(t =>
@@ -212,7 +239,7 @@ export async function generateSuggestions(
       
       suggestions.push({
         timeSlot: cls.timeSlot,
-        className: cls.class,
+        className: cls.className,
         subject: cls.subject,
         priorityTeachers: priorityTeachers.map(t => ({
           fullName: t.fullName,

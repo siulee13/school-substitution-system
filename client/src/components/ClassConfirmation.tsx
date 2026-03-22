@@ -8,7 +8,7 @@ import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 interface ClassConfirmationProps {
   teacher: string;
   date: Date;
-  classes: Array<{ timeSlot: string; class: string; subject: string }>;
+  classes: Array<{ timeSlot: string; className: string; subject: string }>;
   isLoading: boolean;
   onConfirm: () => void;
   onBack: () => void;
@@ -57,7 +57,7 @@ export default function ClassConfirmation({
                 {classes.map((lesson, idx) => (
                   <TableRow key={idx}>
                     <TableCell className="text-center font-medium">{lesson.timeSlot}</TableCell>
-                    <TableCell className="text-center">{lesson.class}</TableCell>
+                    <TableCell className="text-center">{lesson.className}</TableCell>
                     <TableCell className="text-center">{lesson.subject}</TableCell>
                   </TableRow>
                 ))}

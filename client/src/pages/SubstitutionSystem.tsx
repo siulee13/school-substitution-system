@@ -221,12 +221,13 @@ export default function SubstitutionSystem() {
           />
         )}
 
-        {step === 'substitution' && substitutionData && suggestions && (
+        {step === 'substitution' && suggestions && (
           <SubstitutionSelection
-            substitutionData={substitutionData}
+            absentTeacher={selectedTeacher}
+            date={selectedDate || new Date()}
             suggestions={suggestions}
             isLoading={suggestionsLoading}
-            onComplete={handleCompleteSubstitution}
+            onConfirm={handleCompleteSubstitution}
             onBack={() => setStep('confirmation')}
           />
         )}
