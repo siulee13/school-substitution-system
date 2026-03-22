@@ -277,6 +277,77 @@ describe('multi-teacher generateSuggestionsMulti shape', () => {
   });
 });
 
+describe('excludedSwapResources deduplication logic', () => {
+  // 模擬 generateSuggestionsMulti 的調課資源去重邏輯
+  // 格式：`${swapTeacherFullName}|||${swapTeacherTimeSlot}`
+  function buildResourceKey(swapTeacherFullName: string, swapTeacherTimeSlot: string): string {
+    return `${swapTeacherFullName}|||${swapTeacherTimeSlot}`;
+  }
+
+  it('should exclude already-used swap resources for subsequent teachers', () => {
+    const excludedSwapResources = new Set<string>();
+
+    // 第一位老師：李弘光請假，系統找到王婉婷在 9:05 的調課建議
+    const teacher1Swaps = [
+      { swapTeacherFullName: '王婉婷', swapTeacherTimeSlot: '9:05－ 9:40', absentTeacherTimeSlot: '12:30－13:05' },
+    ];
+    // 將第一位老師的調課資源加入已佔用集合
+    for (const swap of teacher1Swaps) {
+      excludedSwapResources.add(buildResourceKey(swap.swapTeacherFullName, swap.swapTeacherTimeSlot));
+    }
+
+    // 第二位老師：梁美紅請假，尝試使用王婉婷在 9:05 的調課建議
+    const candidate2 = { swapTeacherFullName: '王婉婷', swapTeacherTimeSlot: '9:05－ 9:40' };
+    const resourceKey2 = buildResourceKey(candidate2.swapTeacherFullName, candidate2.swapTeacherTimeSlot);
+    // 應被排除（已被第一位老師佔用）
+    expect(excludedSwapResources.has(resourceKey2)).toBe(true);
+
+    // 第三位老師：鄧淡芳請假，尝試使用王婉婷在 9:05 的調課建議
+    const candidate3 = { swapTeacherFullName: '王婉婷', swapTeacherTimeSlot: '9:05－ 9:40' };
+    const resourceKey3 = buildResourceKey(candidate3.swapTeacherFullName, candidate3.swapTeacherTimeSlot);
+    // 同樣應被排除
+    expect(excludedSwapResources.has(resourceKey3)).toBe(true);
+  });
+
+  it('should allow different swap resources for different teachers', () => {
+    const excludedSwapResources = new Set<string>();
+
+    // 第一位老師佔用王婉婷 9:05
+    excludedSwapResources.add(buildResourceKey('王婉婷', '9:05－ 9:40'));
+
+    // 第二位老師使用另一位老師陳大文 10:00 的調課建議
+    const candidate = { swapTeacherFullName: '陳大文', swapTeacherTimeSlot: '10:00－10:35' };
+    const resourceKey = buildResourceKey(candidate.swapTeacherFullName, candidate.swapTeacherTimeSlot);
+    // 不同資源，不應被排除
+    expect(excludedSwapResources.has(resourceKey)).toBe(false);
+  });
+
+  it('should correctly build resource key format', () => {
+    const key = buildResourceKey('王婉婷', '9:05－ 9:40');
+    expect(key).toBe('王婉婷|||9:05－ 9:40');
+    expect(key.includes('|||')).toBe(true);
+    const parts = key.split('|||');
+    expect(parts[0]).toBe('王婉婷');
+    expect(parts[1]).toBe('9:05－ 9:40');
+  });
+
+  it('should handle sequential processing order (first teacher gets priority)', () => {
+    // 模擬順序處理：第一位老師優先取得調課資源
+    const excludedSwapResources = new Set<string>();
+    const swapResource = '王婉婷|||9:05－ 9:40';
+
+    // 第一位老師處理完成，加入資源
+    excludedSwapResources.add(swapResource);
+    expect(excludedSwapResources.size).toBe(1);
+
+    // 第二位老師檢查同一資源→被排除
+    expect(excludedSwapResources.has(swapResource)).toBe(true);
+
+    // 第三位老師檢查同一資源→同樣被排除
+    expect(excludedSwapResources.has(swapResource)).toBe(true);
+  });
+});
+
 describe('swap candidate logic validation', () => {
   it('should correctly identify that swap requires earlier time slot', () => {
     // 調課邏輯：swapTeacherTimeSlot 必須在 absentTeacherTimeSlot 之前

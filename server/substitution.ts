@@ -241,7 +241,9 @@ export interface SwapCandidate {
 async function findSwapCandidates(
   dayOfWeek: string,
   absentTeacherFullName: string,
-  absentClasses: Array<{ timeSlot: string; className: string; subject: string }>
+  absentClasses: Array<{ timeSlot: string; className: string; subject: string }>,
+  /** 已被其他請假老師佔用的調課資源，格式：`${swapTeacherFullName}|||${swapTeacherTimeSlot}` */
+  excludedSwapResources: Set<string> = new Set()
 ): Promise<SwapCandidate[]> {
   const db = await getTeacherDb();
 
@@ -361,6 +363,10 @@ async function findSwapCandidates(
       const absentTeachesAClass = teacherTeachesClassOnDay(absentTeacherFullName, otherClassName);
       if (!absentTeachesAClass) continue;
 
+      // 排除已被其他請假老師佔用的調課資源
+      const resourceKey = `${otherTeacherName}|||${otherTimeSlot}`;
+      if (excludedSwapResources.has(resourceKey)) continue;
+
       // 避免重複：同一 (swapTeacher, swapTimeSlot, absentTimeSlot) 組合只記錄一次
       const alreadyExists = candidates.some(
         c =>
@@ -410,7 +416,9 @@ export async function generateSuggestions(
   absentTeacherFullName: string,
   startTime?: string,
   endTime?: string,
-  allowSwap?: boolean
+  allowSwap?: boolean,
+  /** 已被其他請假老師佔用的調課資源，格式：`${swapTeacherFullName}|||${swapTeacherTimeSlot}` */
+  excludedSwapResources: Set<string> = new Set()
 ): Promise<SuggestionItem[]> {
   try {
     const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
@@ -427,7 +435,7 @@ export async function generateSuggestions(
     // 調課候選（allowSwap 時計算）
     let swapCandidatesList: SwapCandidate[] = [];
     if (allowSwap && targetClasses.length > 0) {
-      swapCandidatesList = await findSwapCandidates(dayOfWeek, absentTeacherFullName, targetClasses);
+      swapCandidatesList = await findSwapCandidates(dayOfWeek, absentTeacherFullName, targetClasses, excludedSwapResources);
     }
 
     const suggestions: SuggestionItem[] = [];
