@@ -6,7 +6,6 @@ import { z } from "zod";
 import {
   getAllTeachers,
   getTeacherClassesByDate,
-  getAvailableTeachers,
   getSubjectTeachersForClass,
   generateSuggestions,
 } from "./substitution";
@@ -37,23 +36,12 @@ export const appRouter = router({
       .input(
         z.object({
           teacherFullName: z.string(),
-          date: z.date(),
+          dateStr: z.string(), // ISO date string e.g. "2026-03-30"
         })
       )
       .query(async ({ input }) => {
-        return await getTeacherClassesByDate(input.teacherFullName, input.date);
-      }),
-
-    // 根據日期及時間段查詢空堂老師
-    getAvailableTeachers: publicProcedure
-      .input(
-        z.object({
-          date: z.date(),
-          timeSlot: z.string(),
-        })
-      )
-      .query(async ({ input }) => {
-        return await getAvailableTeachers(input.date, input.timeSlot);
+        const date = new Date(input.dateStr);
+        return await getTeacherClassesByDate(input.teacherFullName, date);
       }),
 
     // 根據班別查詢科任老師
@@ -67,12 +55,13 @@ export const appRouter = router({
     generateSuggestions: publicProcedure
       .input(
         z.object({
-          date: z.date(),
+          dateStr: z.string(), // ISO date string e.g. "2026-03-30"
           absentTeacherFullName: z.string(),
         })
       )
       .query(async ({ input }) => {
-        return await generateSuggestions(input.date, input.absentTeacherFullName);
+        const date = new Date(input.dateStr);
+        return await generateSuggestions(date, input.absentTeacherFullName);
       }),
   }),
 });

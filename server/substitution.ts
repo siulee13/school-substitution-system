@@ -1,11 +1,12 @@
 import fs from 'fs';
 import path from 'path';
-import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
+// @ts-ignore - use asm version to avoid wasm loading issues in server environment
+import initSqlJs from 'sql.js/dist/sql-asm.js';
+type SqlJsDatabase = any;
 
 const dbDir = path.join(process.cwd(), '..');
 
 let teacherDb: SqlJsDatabase | null = null;
-let classDb: SqlJsDatabase | null = null;
 let sqlJs: any = null;
 
 // 初始化 sql.js
@@ -16,63 +17,30 @@ async function initSql() {
   return sqlJs;
 }
 
-// 初始化資料庫連接
+// 初始化資料庫連接（每次重新讀取，避免快取問題）
 async function getTeacherDb(): Promise<SqlJsDatabase> {
   if (!teacherDb) {
     const sql = await initSql();
     const dbPath = path.join(dbDir, 'timetable.db');
     const fileBuffer = fs.readFileSync(dbPath);
     teacherDb = new sql.Database(fileBuffer) as SqlJsDatabase;
+    console.log('[DB] timetable.db loaded successfully');
   }
   return teacherDb as SqlJsDatabase;
 }
 
-async function getClassDb(): Promise<SqlJsDatabase> {
-  if (!classDb) {
-    const sql = await initSql();
-    const dbPath = path.join(dbDir, 'class_timetable.db');
-    const fileBuffer = fs.readFileSync(dbPath);
-    classDb = new sql.Database(fileBuffer) as SqlJsDatabase;
-  }
-  return classDb as SqlJsDatabase;
-}
-
 // 加載科任老師映射
-function loadSubjectTeacherMappings() {
+function loadSubjectTeacherMappings(): Record<string, Record<string, string>> {
   const mappingPath = path.join(dbDir, 'subject_teacher_mappings.json');
   if (fs.existsSync(mappingPath)) {
     return JSON.parse(fs.readFileSync(mappingPath, 'utf-8'));
   }
+  console.warn('[DB] subject_teacher_mappings.json not found at', mappingPath);
   return {};
 }
 
-// 獲取所有老師列表（含全名及簡稱）
-export async function getAllTeachers(): Promise<Array<{ fullName: string; shortName: string }>> {
-  try {
-    const db = await getTeacherDb();
-    const stmt = db.prepare('SELECT full_name, short_name FROM teacher_names ORDER BY full_name');
-    stmt.bind();
-    const rows: Array<{ fullName: string; shortName: string }> = [];
-    
-    while (stmt.step()) {
-      const row = stmt.getAsObject();
-      rows.push({
-        fullName: row.full_name as string,
-        shortName: row.short_name as string,
-      });
-    }
-    stmt.free();
-    
-    return rows;
-  } catch (error) {
-    console.error('Error fetching teachers:', error);
-    return [];
-  }
-}
-
-// 根據日期及老師查詢當日課堂
+// 解析時間字串，用於排序
 function parseTimeForSorting(timeStr: string): number {
-  // 例如 "7:45 - 8:10" 或 "8:10－ 8:30" 或 "09:50－10:25"
   const match = timeStr.match(/(\d{1,2}):(\d{2})/);
   if (match) {
     return parseInt(match[1]) * 60 + parseInt(match[2]);
@@ -80,130 +48,140 @@ function parseTimeForSorting(timeStr: string): number {
   return 0;
 }
 
+// 解析班別和科目
 function parseClassAndSubject(content: string): { className: string; subject: string } {
-  // 例如 "5A 體育 籃球場1" 或 "2B 體育 操基1" 或 "班主任課"
   const classMatch = content.match(/^([1-6][A-F])\s+(.+)$/);
   if (classMatch) {
     const className = classMatch[1];
     const rest = classMatch[2];
-    // 例如 "體育 籃球場1" 或 "體育 操基1"
     const subjectMatch = rest.match(/^([^\s]+)/);
     const subject = subjectMatch ? subjectMatch[1] : rest;
     return { className, subject };
   }
-  // 如果沒有班別，可能是特殊課程如 "班主任課"
   return { className: 'N/A', subject: content };
 }
 
+// 獲取所有老師列表（含全名及簡稱）
+export async function getAllTeachers(): Promise<Array<{ fullName: string; shortName: string }>> {
+  try {
+    const db = await getTeacherDb();
+    const result = db.exec('SELECT full_name, short_name FROM teacher_names ORDER BY full_name');
+    if (!result || result.length === 0) return [];
+    
+    return result[0].values.map((row: any[]) => ({
+      fullName: row[0] as string,
+      shortName: row[1] as string,
+    }));
+  } catch (error) {
+    console.error('[DB] Error fetching teachers:', error);
+    return [];
+  }
+}
+
+// 根據日期及老師查詢當日課堂
 export async function getTeacherClassesByDate(
   teacherFullName: string,
   date: Date
-): Promise<Array<{ timeSlot: string; className: string; subject: string; location?: string }>> {
+): Promise<Array<{ timeSlot: string; className: string; subject: string }>> {
   try {
-    const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
-
+    // 使用 UTC 日期以避免時區問題
+    const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getUTCDay()];
     const db = await getTeacherDb();
-    const stmt = db.prepare(`
-      SELECT Time as timeSlot, Content as content FROM timetable 
-      WHERE Teacher = ? AND Day = ?
-    `);
-    stmt.bind([teacherFullName, dayOfWeek]);
-    const rows: Array<{ timeSlot: string; className: string; subject: string }> = [];
     
-    while (stmt.step()) {
-      const row = stmt.getAsObject();
-      const { className, subject } = parseClassAndSubject(row.content as string);
-      rows.push({
-        timeSlot: row.timeSlot as string,
+    const result = db.exec(
+      `SELECT Time as timeSlot, Content as content FROM timetable WHERE Teacher = '${teacherFullName.replace(/'/g, "''")}' AND Day = '${dayOfWeek}'`
+    );
+    
+    if (!result || result.length === 0) return [];
+    
+    const rows = result[0].values.map((row: any[]) => {
+      const { className, subject } = parseClassAndSubject(row[1] as string);
+      return {
+        timeSlot: row[0] as string,
         className,
         subject,
-      });
-    }
-    stmt.free();
+      };
+    });
     
-    // 按時間排序
-    rows.sort((a, b) => parseTimeForSorting(a.timeSlot) - parseTimeForSorting(b.timeSlot));
-    
+    rows.sort((a: { timeSlot: string; className: string; subject: string }, b: { timeSlot: string; className: string; subject: string }) => parseTimeForSorting(a.timeSlot) - parseTimeForSorting(b.timeSlot));
     return rows;
   } catch (error) {
-    console.error('Error fetching teacher classes:', error);
+    console.error('[DB] Error fetching teacher classes:', error);
     return [];
   }
 }
 
-// 根據日期及時間段查詢空堂老師
-export async function getAvailableTeachers(
-  date: Date,
+// 根據日期及時間段查詢空堂老師（使用原始時間格式）
+async function getAvailableTeachersForSlot(
+  dayOfWeek: string,
   timeSlot: string
 ): Promise<Array<{ fullName: string; shortName: string }>> {
   try {
-    const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
-
     const db = await getTeacherDb();
-    const stmt = db.prepare(`
-      SELECT DISTINCT full_name, short_name FROM teacher_names 
-      WHERE full_name NOT IN (
-        SELECT Teacher FROM timetable 
-        WHERE Day = ? AND Time = ?
-      )
-      ORDER BY full_name
-    `);
-    stmt.bind([dayOfWeek, timeSlot]);
-    const rows: Array<{ fullName: string; shortName: string }> = [];
+    const result = db.exec(
+      `SELECT DISTINCT full_name, short_name FROM teacher_names 
+       WHERE full_name NOT IN (
+         SELECT Teacher FROM timetable 
+         WHERE Day = '${dayOfWeek}' AND Time = '${timeSlot.replace(/'/g, "''")}'
+       )
+       ORDER BY full_name`
+    );
     
-    while (stmt.step()) {
-      const row = stmt.getAsObject();
-      rows.push({
-        fullName: row.full_name as string,
-        shortName: row.short_name as string,
-      });
-    }
-    stmt.free();
+    if (!result || result.length === 0) return [];
     
-    return rows;
+    return result[0].values.map((row: any[]) => ({
+      fullName: row[0] as string,
+      shortName: row[1] as string,
+    }));
   } catch (error) {
-    console.error('Error fetching available teachers:', error);
+    console.error('[DB] Error fetching available teachers:', error);
     return [];
   }
 }
 
-// 根據班別查詢科任老師
-export async function getSubjectTeachersForClass(
+// 根據班別查詢科任老師（從 JSON 映射中讀取，映射中儲存的是簡稱）
+async function getSubjectTeachersForClassInternal(
   className: string
 ): Promise<Array<{ fullName: string; shortName: string; subject: string }>> {
   try {
     const mappings = loadSubjectTeacherMappings();
     const classMapping = mappings[className] || {};
-    
     const db = await getTeacherDb();
-    const stmt = db.prepare('SELECT full_name, short_name FROM teacher_names WHERE full_name = ?');
     
     const teachers: Array<{ fullName: string; shortName: string; subject: string }> = [];
     
-    for (const [subject, teacherName] of Object.entries(classMapping)) {
-      if (typeof teacherName === 'string') {
-        stmt.bind([teacherName]);
-        if (stmt.step()) {
-          const row = stmt.getAsObject();
+    for (const [subject, shortName] of Object.entries(classMapping)) {
+      if (typeof shortName === 'string') {
+        // 映射中存的是簡稱，用簡稱查全名
+        const result = db.exec(
+          `SELECT full_name, short_name FROM teacher_names WHERE short_name = '${shortName.replace(/'/g, "''")}'`
+        );
+        if (result && result.length > 0 && result[0].values.length > 0) {
+          const row = result[0].values[0];
           teachers.push({
-            fullName: row.full_name as string,
-            shortName: row.short_name as string,
-            subject: subject,
+            fullName: row[0] as string,
+            shortName: row[1] as string,
+            subject,
           });
         }
-        stmt.reset();
       }
     }
-    stmt.free();
     
     return teachers;
   } catch (error) {
-    console.error('Error fetching subject teachers:', error);
+    console.error('[DB] Error fetching subject teachers:', error);
     return [];
   }
 }
 
-// 生成代課建議
+// 公開 API：根據班別查詢科任老師
+export async function getSubjectTeachersForClass(
+  className: string
+): Promise<Array<{ fullName: string; shortName: string; subject: string }>> {
+  return getSubjectTeachersForClassInternal(className);
+}
+
+// 生成代課建議（核心邏輯）
 export async function generateSuggestions(
   date: Date,
   absentTeacherFullName: string
@@ -215,44 +193,57 @@ export async function generateSuggestions(
   otherTeachers: Array<{ fullName: string; shortName: string }>;
 }>> {
   try {
+    // 使用 UTC 日期以避免時區問題
+    const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getUTCDay()];
+    
     // 獲取請假老師當日課堂
     const classes = await getTeacherClassesByDate(absentTeacherFullName, date);
+    console.log(`[Suggestions] ${absentTeacherFullName} on ${dayOfWeek}: ${classes.length} classes`);
     
     const suggestions = [];
     
     for (const cls of classes) {
-      // 獲取該時段空堂老師
-      const availableTeachers = await getAvailableTeachers(date, cls.timeSlot);
+      // 獲取該時段空堂老師（使用原始時間格式）
+      const availableTeachers = await getAvailableTeachersForSlot(dayOfWeek, cls.timeSlot);
+      console.log(`[Suggestions] ${cls.timeSlot} ${cls.className}: ${availableTeachers.length} available teachers`);
       
-      // 獲取該班別科任老師
-      const subjectTeachers = await getSubjectTeachersForClass(cls.className);
+      // 如果是 N/A（非班別課堂，如早會、當值），仍列出空堂老師
+      let priorityTeachers: Array<{ fullName: string; shortName: string; subject: string }> = [];
+      let otherTeachers = availableTeachers;
       
-      // 篩選優先老師（科任老師中的空堂老師）
-      const priorityTeachers = availableTeachers.filter(t =>
-        subjectTeachers.some(st => st.fullName === t.fullName)
-      );
-      
-      // 其他空堂老師
-      const otherTeachers = availableTeachers.filter(t =>
-        !priorityTeachers.some(pt => pt.fullName === t.fullName)
-      );
+      if (cls.className !== 'N/A') {
+        // 獲取該班別科任老師
+        const subjectTeachers = await getSubjectTeachersForClassInternal(cls.className);
+        const subjectTeacherMap = new Map(subjectTeachers.map(st => [st.fullName, st]));
+        
+        // 篩選優先老師（科任老師中的空堂老師）
+        priorityTeachers = availableTeachers
+          .filter(t => subjectTeacherMap.has(t.fullName))
+          .map(t => ({
+            fullName: t.fullName,
+            shortName: t.shortName,
+            subject: subjectTeacherMap.get(t.fullName)?.subject || 'N/A',
+          }));
+        
+        // 其他空堂老師（非科任）
+        const priorityNames = new Set(priorityTeachers.map(pt => pt.fullName));
+        otherTeachers = availableTeachers.filter(t => !priorityNames.has(t.fullName));
+        
+        console.log(`[Suggestions] ${cls.className}: ${priorityTeachers.length} priority, ${otherTeachers.length} others`);
+      }
       
       suggestions.push({
         timeSlot: cls.timeSlot,
         className: cls.className,
         subject: cls.subject,
-        priorityTeachers: priorityTeachers.map(t => ({
-          fullName: t.fullName,
-          shortName: t.shortName,
-          subject: subjectTeachers.find(st => st.fullName === t.fullName)?.subject || 'N/A',
-        })),
+        priorityTeachers,
         otherTeachers,
       });
     }
     
     return suggestions;
   } catch (error) {
-    console.error('Error generating suggestions:', error);
+    console.error('[DB] Error generating suggestions:', error);
     return [];
   }
 }

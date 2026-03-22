@@ -27,7 +27,7 @@ export default function SubstitutionSystem() {
   const { data: classesByDate, isLoading: classesLoading } = trpc.substitution.getTeacherClasses.useQuery(
     {
       teacherFullName: selectedTeacher,
-      date: selectedDate || new Date(),
+      dateStr: (selectedDate || new Date()).toISOString(),
     },
     {
       enabled: step === 'confirmation' && !!selectedTeacher && !!selectedDate,
@@ -38,7 +38,7 @@ export default function SubstitutionSystem() {
   const { data: suggestions, isLoading: suggestionsLoading } =
     trpc.substitution.generateSuggestions.useQuery(
       {
-        date: selectedDate || new Date(),
+        dateStr: (selectedDate || new Date()).toISOString(),
         absentTeacherFullName: selectedTeacher,
       },
       {
