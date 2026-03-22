@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
+// Checkbox 改用原生 HTML，避免 Radix UI hooks 衝突
 import { CalendarIcon, ChevronRight, Loader2, Clock, ArrowLeftRight } from 'lucide-react';
 import ClassConfirmation from '@/components/ClassConfirmation';
 import SubstitutionSelection, { decodeSwapValue } from '@/components/SubstitutionSelection';
@@ -318,11 +318,14 @@ export default function SubstitutionSystem() {
                     allowSwap ? 'border-purple-400 bg-purple-50' : 'border-gray-200 hover:border-gray-300 bg-white'
                   }`}
                 >
-                  <Checkbox
+                  <input
                     id="allowSwap"
+                    type="checkbox"
                     checked={allowSwap}
-                    onCheckedChange={(checked) => setAllowSwap(checked === true)}
-                    className="mt-0.5 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                    onChange={(e) => setAllowSwap(e.target.checked)}
+                    className={`mt-0.5 w-4 h-4 cursor-pointer rounded border-2 ${
+                      allowSwap ? 'accent-purple-600' : ''
+                    }`}
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
