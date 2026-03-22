@@ -32,6 +32,7 @@ interface SubstitutionSelectionProps {
   date: Date;
   suggestions: SuggestionItem[];
   isLoading: boolean;
+  excludedSwapResources?: Set<string>; // 已被前一位老師佔用的調課資源，格式：`${swapTeacherFullName}|||${swapTeacherTimeSlot}`
   onConfirm: (selections: Record<number, string>) => void;
   onBack: () => void;
 }
@@ -60,6 +61,7 @@ export default function SubstitutionSelection({
   date,
   suggestions,
   isLoading,
+  excludedSwapResources,
   onConfirm,
   onBack,
 }: SubstitutionSelectionProps) {
@@ -108,7 +110,13 @@ export default function SubstitutionSelection({
     );
   }
 
-  const hasSwapCandidates = currentSuggestion.swapCandidates && currentSuggestion.swapCandidates.length > 0;
+  // 過濾已被前一位老師佔用的調課候選
+  const availableSwapCandidates = currentSuggestion.swapCandidates?.filter(swap => {
+    if (!excludedSwapResources) return true;
+    const key = `${swap.swapTeacherFullName}|||${swap.swapTeacherTimeSlot}`;
+    return !excludedSwapResources.has(key);
+  }) || [];
+  const hasSwapCandidates = availableSwapCandidates.length > 0;
   const currentValue = selections[currentIndex] || '';
   const selectedSwap = currentValue.startsWith(SWAP_PREFIX) ? decodeSwapValue(currentValue) : null;
 
@@ -145,7 +153,7 @@ export default function SubstitutionSelection({
               <span className="text-sm font-semibold text-purple-800">調課建議（優先）</span>
             </div>
             <div className="p-3 space-y-2">
-              {currentSuggestion.swapCandidates.map((swap, idx) => {
+              {availableSwapCandidates.map((swap, idx) => {
                 const swapValue = encodeSwapValue(swap);
                 const isSelected = currentValue === swapValue;
                 return (

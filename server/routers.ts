@@ -88,32 +88,20 @@ export const appRouter = router({
         const [year, month, day] = input.dateStr.split('T')[0].split('-').map(Number);
         const date = new Date(year, month - 1, day);
 
-        // 順序生成每位老師的代課建議（不能並行，需確保調課資源不重複分配）
-        // excludedSwapResources 記錄已被前面老師佔用的調課資源，格式：`${swapTeacherFullName}|||${swapTeacherTimeSlot}`
-        const excludedSwapResources = new Set<string>();
-        const results: Array<{ teacherFullName: string; suggestions: Awaited<ReturnType<typeof generateSuggestions>> }> = [];
-
-        for (const teacher of input.absentTeachers) {
-          const suggestions = await generateSuggestions(
-            date,
-            teacher.fullName,
-            teacher.startTime,
-            teacher.endTime,
-            input.allowSwap,
-            excludedSwapResources
-          );
-
-          // 將此老師的調課建議加入已佔用集合，避免後續老師重複使用
-          if (input.allowSwap) {
-            for (const suggestion of suggestions) {
-              for (const swap of suggestion.swapCandidates) {
-                excludedSwapResources.add(`${swap.swapTeacherFullName}|||${swap.swapTeacherTimeSlot}`);
-              }
-            }
-          }
-
-          results.push({ teacherFullName: teacher.fullName, suggestions });
-        }
+        // 並行生成每位老師的完整代課建議列表
+        // 調課資源的去重邏輯交由前端處理（用戶實際選擇後才知道哪個調課方案被使用）
+        const results = await Promise.all(
+          input.absentTeachers.map(async (teacher) => {
+            const suggestions = await generateSuggestions(
+              date,
+              teacher.fullName,
+              teacher.startTime,
+              teacher.endTime,
+              input.allowSwap
+            );
+            return { teacherFullName: teacher.fullName, suggestions };
+          })
+        );
 
         return results;
       }),
