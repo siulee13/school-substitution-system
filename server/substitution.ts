@@ -1,16 +1,40 @@
-import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
+import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
 
 const dbDir = path.join(process.cwd(), '..');
 
-// 初始化資料庫連接
-function getTeacherDb() {
-  return new Database(path.join(dbDir, 'timetable.db'));
+let teacherDb: SqlJsDatabase | null = null;
+let classDb: SqlJsDatabase | null = null;
+let sqlJs: any = null;
+
+// 初始化 sql.js
+async function initSql() {
+  if (!sqlJs) {
+    sqlJs = await initSqlJs();
+  }
+  return sqlJs;
 }
 
-function getClassDb() {
-  return new Database(path.join(dbDir, 'class_timetable.db'));
+// 初始化資料庫連接
+async function getTeacherDb(): Promise<SqlJsDatabase> {
+  if (!teacherDb) {
+    const sql = await initSql();
+    const dbPath = path.join(dbDir, 'timetable.db');
+    const fileBuffer = fs.readFileSync(dbPath);
+    teacherDb = new sql.Database(fileBuffer) as SqlJsDatabase;
+  }
+  return teacherDb as SqlJsDatabase;
+}
+
+async function getClassDb(): Promise<SqlJsDatabase> {
+  if (!classDb) {
+    const sql = await initSql();
+    const dbPath = path.join(dbDir, 'class_timetable.db');
+    const fileBuffer = fs.readFileSync(dbPath);
+    classDb = new sql.Database(fileBuffer) as SqlJsDatabase;
+  }
+  return classDb as SqlJsDatabase;
 }
 
 // 加載科任老師映射
@@ -25,11 +49,21 @@ function loadSubjectTeacherMappings() {
 // 獲取所有老師列表（含全名及簡稱）
 export async function getAllTeachers(): Promise<Array<{ fullName: string; shortName: string }>> {
   try {
-    const db = getTeacherDb();
+    const db = await getTeacherDb();
     const stmt = db.prepare('SELECT full_name, short_name FROM teacher_names ORDER BY full_name');
-    const rows = stmt.all() as any[];
-    db.close();
-    return rows.map(row => ({ fullName: row.full_name, shortName: row.short_name }));
+    stmt.bind();
+    const rows: Array<{ fullName: string; shortName: string }> = [];
+    
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      rows.push({
+        fullName: row.full_name as string,
+        shortName: row.short_name as string,
+      });
+    }
+    stmt.free();
+    
+    return rows;
   } catch (error) {
     console.error('Error fetching teachers:', error);
     return [];
@@ -44,20 +78,26 @@ export async function getTeacherClassesByDate(
   try {
     const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
 
-    const db = getTeacherDb();
+    const db = await getTeacherDb();
     const stmt = db.prepare(`
       SELECT Time as timeSlot, Content as subject FROM timetable 
       WHERE Teacher = ? AND Day = ?
       ORDER BY Time
     `);
-    const rows = stmt.all(teacherFullName, dayOfWeek) as any[];
-    db.close();
-
-    return rows.map(row => ({
-      timeSlot: row.timeSlot,
-      class: 'N/A', // 從 timetable 表無法直接獲得班別，需要從 Content 中解析
-      subject: row.subject,
-    }));
+    stmt.bind([teacherFullName, dayOfWeek]);
+    const rows: Array<{ timeSlot: string; class: string; subject: string }> = [];
+    
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      rows.push({
+        timeSlot: row.timeSlot as string,
+        class: 'N/A',
+        subject: row.subject as string,
+      });
+    }
+    stmt.free();
+    
+    return rows;
   } catch (error) {
     console.error('Error fetching teacher classes:', error);
     return [];
@@ -72,7 +112,7 @@ export async function getAvailableTeachers(
   try {
     const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
 
-    const db = getTeacherDb();
+    const db = await getTeacherDb();
     const stmt = db.prepare(`
       SELECT DISTINCT full_name, short_name FROM teacher_names 
       WHERE full_name NOT IN (
@@ -81,10 +121,19 @@ export async function getAvailableTeachers(
       )
       ORDER BY full_name
     `);
-    const rows = stmt.all(dayOfWeek, timeSlot) as any[];
-    db.close();
-
-    return rows.map(row => ({ fullName: row.full_name, shortName: row.short_name }));
+    stmt.bind([dayOfWeek, timeSlot]);
+    const rows: Array<{ fullName: string; shortName: string }> = [];
+    
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      rows.push({
+        fullName: row.full_name as string,
+        shortName: row.short_name as string,
+      });
+    }
+    stmt.free();
+    
+    return rows;
   } catch (error) {
     console.error('Error fetching available teachers:', error);
     return [];
@@ -94,41 +143,33 @@ export async function getAvailableTeachers(
 // 根據班別查詢科任老師
 export async function getSubjectTeachersForClass(
   className: string
-): Promise<Array<{ fullName: string; shortName: string; subjects: string[] }>> {
+): Promise<Array<{ fullName: string; shortName: string; subject: string }>> {
   try {
     const mappings = loadSubjectTeacherMappings();
-    const classMapping = mappings[className];
-
-    if (!classMapping) {
-      return [];
-    }
-
-    // 獲取所有老師的簡稱到全名的映射
-    const teachers = await getAllTeachers();
-    const shortToFull = new Map(teachers.map(t => [t.shortName, t.fullName]));
-
-    // 將簡稱轉換為全名，並聚合科目
-    const subjectTeachers = new Map<string, { fullName: string; shortName: string; subjects: Set<string> }>();
-
-    for (const [subject, shortName] of Object.entries(classMapping)) {
-      const fullName = shortToFull.get(shortName as string);
-      if (fullName) {
-        if (!subjectTeachers.has(fullName)) {
-          subjectTeachers.set(fullName, {
-            fullName,
-            shortName: shortName as string,
-            subjects: new Set(),
+    const classMapping = mappings[className] || {};
+    
+    const db = await getTeacherDb();
+    const stmt = db.prepare('SELECT full_name, short_name FROM teacher_names WHERE full_name = ?');
+    
+    const teachers: Array<{ fullName: string; shortName: string; subject: string }> = [];
+    
+    for (const [subject, teacherName] of Object.entries(classMapping)) {
+      if (typeof teacherName === 'string') {
+        stmt.bind([teacherName]);
+        if (stmt.step()) {
+          const row = stmt.getAsObject();
+          teachers.push({
+            fullName: row.full_name as string,
+            shortName: row.short_name as string,
+            subject: subject,
           });
         }
-        subjectTeachers.get(fullName)!.subjects.add(subject);
+        stmt.reset();
       }
     }
-
-    return Array.from(subjectTeachers.values()).map(t => ({
-      fullName: t.fullName,
-      shortName: t.shortName,
-      subjects: Array.from(t.subjects),
-    }));
+    stmt.free();
+    
+    return teachers;
   } catch (error) {
     console.error('Error fetching subject teachers:', error);
     return [];
@@ -136,54 +177,55 @@ export async function getSubjectTeachersForClass(
 }
 
 // 生成代課建議
-export async function generateSubstitutionSuggestions(
+export async function generateSuggestions(
   date: Date,
   absentTeacherFullName: string
-): Promise<
-  Array<{
-    timeSlot: string;
-    class: string;
-    subject: string;
-    subjectTeachers: Array<{ fullName: string; shortName: string; subjects: string[] }>;
-    otherTeachers: Array<{ fullName: string; shortName: string }>;
-  }>
-> {
+): Promise<Array<{
+  timeSlot: string;
+  className: string;
+  subject: string;
+  priorityTeachers: Array<{ fullName: string; shortName: string; subject: string }>;
+  otherTeachers: Array<{ fullName: string; shortName: string }>;
+}>> {
   try {
-    // 1. 獲取請假老師當日課堂
-    const absentClasses = await getTeacherClassesByDate(absentTeacherFullName, date);
-
-    // 2. 為每一堂課生成建議
-    const suggestions = await Promise.all(
-      absentClasses.map(async (lesson) => {
-        // 獲取該時段空堂老師
-        const availableTeachers = await getAvailableTeachers(date, lesson.timeSlot);
-
-        // 獲取該班別的科任老師
-        const subjectTeachers = await getSubjectTeachersForClass(lesson.class);
-
-        // 篩選出該時段空堂的科任老師
-        const availableSubjectTeachers = subjectTeachers.filter((st) =>
-          availableTeachers.some((at) => at.fullName === st.fullName)
-        );
-
-        // 其他空堂老師（不是科任老師）
-        const otherTeachers = availableTeachers.filter(
-          (at) => !subjectTeachers.some((st) => st.fullName === at.fullName)
-        );
-
-        return {
-          timeSlot: lesson.timeSlot,
-          class: lesson.class,
-          subject: lesson.subject,
-          subjectTeachers: availableSubjectTeachers,
-          otherTeachers,
-        };
-      })
-    );
-
+    // 獲取請假老師當日課堂
+    const classes = await getTeacherClassesByDate(absentTeacherFullName, date);
+    
+    const suggestions = [];
+    
+    for (const cls of classes) {
+      // 獲取該時段空堂老師
+      const availableTeachers = await getAvailableTeachers(date, cls.timeSlot);
+      
+      // 獲取該班別科任老師
+      const subjectTeachers = await getSubjectTeachersForClass(cls.class);
+      
+      // 篩選優先老師（科任老師中的空堂老師）
+      const priorityTeachers = availableTeachers.filter(t =>
+        subjectTeachers.some(st => st.fullName === t.fullName)
+      );
+      
+      // 其他空堂老師
+      const otherTeachers = availableTeachers.filter(t =>
+        !priorityTeachers.some(pt => pt.fullName === t.fullName)
+      );
+      
+      suggestions.push({
+        timeSlot: cls.timeSlot,
+        className: cls.class,
+        subject: cls.subject,
+        priorityTeachers: priorityTeachers.map(t => ({
+          fullName: t.fullName,
+          shortName: t.shortName,
+          subject: subjectTeachers.find(st => st.fullName === t.fullName)?.subject || 'N/A',
+        })),
+        otherTeachers,
+      });
+    }
+    
     return suggestions;
   } catch (error) {
-    console.error('Error generating substitution suggestions:', error);
+    console.error('Error generating suggestions:', error);
     return [];
   }
 }

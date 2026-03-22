@@ -8,7 +8,7 @@ import {
   getTeacherClassesByDate,
   getAvailableTeachers,
   getSubjectTeachersForClass,
-  generateSubstitutionSuggestions,
+  generateSuggestions,
 } from "./substitution";
 
 export const appRouter = router({
@@ -72,7 +72,7 @@ export const appRouter = router({
         })
       )
       .query(async ({ input }) => {
-        return await generateSubstitutionSuggestions(input.date, input.absentTeacherFullName);
+        return await generateSuggestions(input.date, input.absentTeacherFullName);
       }),
   }),
 });

@@ -21,9 +21,9 @@ interface SubstitutionSelectionProps {
   };
   suggestions: Array<{
     timeSlot: string;
-    class: string;
+    className: string;
     subject: string;
-    subjectTeachers: Array<{ fullName: string; shortName: string; subjects: string[] }>;
+    priorityTeachers: Array<{ fullName: string; shortName: string; subject: string }>;
     otherTeachers: Array<{ fullName: string; shortName: string }>;
   }>;
   isLoading: boolean;
@@ -127,7 +127,7 @@ export default function SubstitutionSelection({
             </div>
             <div>
               <p className="text-sm text-gray-600">班別</p>
-              <p className="font-semibold text-lg">{currentSuggestion.class}</p>
+              <p className="font-semibold text-lg">{currentSuggestion.className}</p>
             </div>
             <div className="col-span-2">
               <p className="text-sm text-gray-600">科目</p>
@@ -139,7 +139,7 @@ export default function SubstitutionSelection({
         {/* 代課老師選擇 */}
         <div className="space-y-4">
           {/* 科任老師（首選） */}
-          {currentSuggestion.subjectTeachers.length > 0 && (
+          {currentSuggestion.priorityTeachers.length > 0 && (
             <div>
               <label className="block text-sm font-semibold text-green-700 mb-2">
                 ★ 首選：該班科任老師
@@ -149,9 +149,9 @@ export default function SubstitutionSelection({
                   <SelectValue placeholder="選擇科任老師" />
                 </SelectTrigger>
                 <SelectContent>
-                  {currentSuggestion.subjectTeachers.map((teacher) => (
+                  {currentSuggestion.priorityTeachers.map((teacher: any) => (
                     <SelectItem key={teacher.fullName} value={teacher.fullName}>
-                      {teacher.fullName} ({teacher.shortName}) - {teacher.subjects.join('、')}
+                      {teacher.fullName} ({teacher.shortName}) - {teacher.subject}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -170,7 +170,7 @@ export default function SubstitutionSelection({
                   <SelectValue placeholder="選擇其他老師" />
                 </SelectTrigger>
                 <SelectContent>
-                  {currentSuggestion.otherTeachers.map((teacher) => (
+                  {currentSuggestion.otherTeachers.map((teacher: any) => (
                     <SelectItem key={teacher.fullName} value={teacher.fullName}>
                       {teacher.fullName} ({teacher.shortName})
                     </SelectItem>
@@ -181,7 +181,7 @@ export default function SubstitutionSelection({
           )}
 
           {/* 無可用老師警告 */}
-          {currentSuggestion.subjectTeachers.length === 0 &&
+          {currentSuggestion.priorityTeachers.length === 0 &&
             currentSuggestion.otherTeachers.length === 0 && (
               <Alert>
                 <AlertCircle className="h-4 w-4" />
