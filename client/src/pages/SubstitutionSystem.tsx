@@ -124,7 +124,8 @@ export default function SubstitutionSystem() {
       multiSuggestionsInput,
       {
         enabled: step === 'substitution' && validTeachers.length > 0 && !!selectedDate,
-        staleTime: 0,
+        // staleTime: Infinity 確保在同一流程中不會重新 fetch，避免切換老師時數據消失
+        staleTime: Infinity,
       }
     );
 
@@ -133,9 +134,12 @@ export default function SubstitutionSystem() {
   const currentSubstTeacher = validTeachers[substitutionTeacherIdx];
   // isLoading 或 isFetching 時視為載入中，避免閃現「無法載入」
   const isSuggestionsLoading = multiSuggestionsLoading || multiSuggestionsFetching || !multiSuggestions;
-  const currentSuggestions = multiSuggestions?.find(
-    r => r.teacherFullName === currentSubstTeacher?.fullName
-  )?.suggestions || [];
+  // 優先用索引比對（更可靠），fallback 用名字比對
+  const currentSuggestions = (
+    multiSuggestions?.[substitutionTeacherIdx]?.suggestions ||
+    multiSuggestions?.find(r => r.teacherFullName === currentSubstTeacher?.fullName)?.suggestions ||
+    []
+  );
 
   // 計算已被前面老師佔用的調課資源（前端去重）
   const usedSwapResources = useMemo(() => {

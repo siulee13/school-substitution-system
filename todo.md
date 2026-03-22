@@ -83,3 +83,6 @@
 
 ## Bug 修復：多位老師調課建議重複
 - [x] 修復 generateSuggestionsMulti：後續老師的調課建議不應複製前一位老師的調課安排
+
+## Bug 修復：第三位老師無法載入代課建議
+- [x] 診斷並修復第 3/3 位老師 currentSuggestions 為空的問題
