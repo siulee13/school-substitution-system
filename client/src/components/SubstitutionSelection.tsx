@@ -14,6 +14,8 @@ interface SwapCandidate {
   absentTeacherTimeSlot: string;
   absentTeacherClassName: string;
   absentTeacherSubject: string;
+  swapTeacherAllClasses?: string[];
+  absentTeacherAllClasses?: string[];
 }
 
 interface SuggestionItem {
@@ -185,6 +187,23 @@ export default function SubstitutionSelection({
                         <p className="text-xs text-amber-700 mt-1 font-medium">
                           ⚠ 需要 {absentTeacher} 在請假前於 {swap.swapTeacherTimeSlot} 完成調課
                         </p>
+                        {/* 雙方同日班別說明 */}
+                        {(swap.swapTeacherAllClasses?.length || swap.absentTeacherAllClasses?.length) ? (
+                          <div className="mt-2 pt-2 border-t border-purple-100 grid grid-cols-2 gap-2">
+                            {swap.swapTeacherAllClasses && swap.swapTeacherAllClasses.length > 0 && (
+                              <div>
+                                <p className="text-xs font-medium text-purple-700">{swap.swapTeacherFullName} 同日教：</p>
+                                <p className="text-xs text-gray-600">{swap.swapTeacherAllClasses.join('、')}</p>
+                              </div>
+                            )}
+                            {swap.absentTeacherAllClasses && swap.absentTeacherAllClasses.length > 0 && (
+                              <div>
+                                <p className="text-xs font-medium text-blue-700">{absentTeacher} 同日教：</p>
+                                <p className="text-xs text-gray-600">{swap.absentTeacherAllClasses.join('、')}</p>
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </button>

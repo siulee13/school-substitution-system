@@ -221,6 +221,10 @@ export interface SwapCandidate {
   absentTeacherClassName: string;
   /** 請假老師在 absentTeacherTimeSlot 上的科目 */
   absentTeacherSubject: string;
+  /** A 老師在同日所有教的班別（用於 UI 顯示互教關係） */
+  swapTeacherAllClasses: string[];
+  /** 請假老師在同日所有教的班別（用於 UI 顯示互教關係） */
+  absentTeacherAllClasses: string[];
 }
 
 /**
@@ -258,6 +262,43 @@ async function findSwapCandidates(
     );
     const count = result?.[0]?.values?.[0]?.[0] ?? 0;
     return (count as number) > 0;
+  }
+
+  // 預先查詢請假老師在同日所有教的班別
+  const absentTeacherDayClassesRaw = db.exec(
+    `SELECT DISTINCT Content FROM timetable 
+     WHERE Teacher = '${absentTeacherFullName.replace(/'/g, "''")}' AND Day = '${dayOfWeek}'`
+  );
+  const absentTeacherAllClassesSet = new Set<string>();
+  if (absentTeacherDayClassesRaw && absentTeacherDayClassesRaw.length > 0) {
+    for (const row of absentTeacherDayClassesRaw[0].values) {
+      const { className } = parseClassAndSubject(row[0] as string);
+      if (className !== 'N/A') absentTeacherAllClassesSet.add(className);
+    }
+  }
+  const absentTeacherAllClasses = Array.from(absentTeacherAllClassesSet).sort();
+
+  // 用於緩存各 A 老師的同日班別（避免重複查詢）
+  const swapTeacherClassCache = new Map<string, string[]>();
+
+  function getSwapTeacherAllClasses(teacherFullName: string): string[] {
+    if (swapTeacherClassCache.has(teacherFullName)) {
+      return swapTeacherClassCache.get(teacherFullName)!;
+    }
+    const raw = db.exec(
+      `SELECT DISTINCT Content FROM timetable 
+       WHERE Teacher = '${teacherFullName.replace(/'/g, "''")}' AND Day = '${dayOfWeek}'`
+    );
+    const classSet = new Set<string>();
+    if (raw && raw.length > 0) {
+      for (const row of raw[0].values) {
+        const { className } = parseClassAndSubject(row[0] as string);
+        if (className !== 'N/A') classSet.add(className);
+      }
+    }
+    const classes = Array.from(classSet).sort();
+    swapTeacherClassCache.set(teacherFullName, classes);
+    return classes;
   }
 
   const candidates: SwapCandidate[] = [];
@@ -338,6 +379,8 @@ async function findSwapCandidates(
         absentTeacherTimeSlot: absentCls.timeSlot,
         absentTeacherClassName: absentCls.className,
         absentTeacherSubject: absentCls.subject,
+        swapTeacherAllClasses: getSwapTeacherAllClasses(otherTeacherName),
+        absentTeacherAllClasses,
       });
     }
   }

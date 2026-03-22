@@ -8,6 +8,8 @@ export interface ReportRow {
   class: string;
   subject: string;
   substitutionTeacher: string;
+  /** 請假老師姓名（多位老師時用於區分） */
+  absentTeacher?: string;
   /** 是否為調課安排 */
   isSwap?: boolean;
   /** 調課說明（請假老師需要在哪個時段代哪班） */
@@ -23,18 +25,24 @@ export default function SubstitutionReport({ report, onReset }: SubstitutionRepo
   const swapCount = report.filter(r => r.isSwap).length;
   const normalCount = report.filter(r => !r.isSwap && r.substitutionTeacher !== '無需代課').length;
 
+  const hasMultiTeacher = report.some(r => r.absentTeacher);
+
   const handleDownload = () => {
+    const headers = hasMultiTeacher
+      ? ['請假老師', '時間', '班別', '科目', '代課/調課老師', '備註']
+      : ['時間', '班別', '科目', '代課/調課老師', '備註'];
     const csvContent = [
-      ['時間', '班別', '科目', '代課/調課老師', '備註'].join(','),
-      ...report.map((row) =>
-        [
+      headers.join(','),
+      ...report.map((row) => {
+        const base = [
           row.timeSlot,
           row.class,
           row.subject,
           row.substitutionTeacher,
           row.isSwap ? `調課 - ${row.swapNote || ''}` : '',
-        ].join(',')
-      ),
+        ];
+        return hasMultiTeacher ? [row.absentTeacher || '', ...base].join(',') : base.join(',');
+      }),
     ].join('\n');
 
     const element = document.createElement('a');
@@ -76,6 +84,7 @@ export default function SubstitutionReport({ report, onReset }: SubstitutionRepo
         <Table>
           <TableHeader>
             <TableRow>
+              {hasMultiTeacher && <TableHead className="text-center">請假老師</TableHead>}
               <TableHead className="text-center">時間</TableHead>
               <TableHead className="text-center">班別</TableHead>
               <TableHead className="text-center">科目</TableHead>
@@ -89,6 +98,9 @@ export default function SubstitutionReport({ report, onReset }: SubstitutionRepo
                 key={idx}
                 className={row.isSwap ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-gray-50'}
               >
+                {hasMultiTeacher && (
+                  <TableCell className="text-center text-xs font-medium text-gray-700">{row.absentTeacher || ''}</TableCell>
+                )}
                 <TableCell className="text-center font-medium">{row.timeSlot}</TableCell>
                 <TableCell className="text-center">{row.class}</TableCell>
                 <TableCell className="text-center">{row.subject}</TableCell>

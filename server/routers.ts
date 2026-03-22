@@ -70,6 +70,38 @@ export const appRouter = router({
         const date = new Date(year, month - 1, day);
         return await generateSuggestions(date, input.absentTeacherFullName, input.startTime, input.endTime, input.allowSwap);
       }),
+
+    // 生成多位老師同日請假的代課建議
+    generateSuggestionsMulti: publicProcedure
+      .input(
+        z.object({
+          dateStr: z.string(),
+          absentTeachers: z.array(z.object({
+            fullName: z.string(),
+            startTime: z.string().optional(),
+            endTime: z.string().optional(),
+          })),
+          allowSwap: z.boolean().optional(),
+        })
+      )
+      .query(async ({ input }) => {
+        const [year, month, day] = input.dateStr.split('T')[0].split('-').map(Number);
+        const date = new Date(year, month - 1, day);
+        // 並行生成每位老師的代課建議
+        const results = await Promise.all(
+          input.absentTeachers.map(async (teacher) => ({
+            teacherFullName: teacher.fullName,
+            suggestions: await generateSuggestions(
+              date,
+              teacher.fullName,
+              teacher.startTime,
+              teacher.endTime,
+              input.allowSwap
+            ),
+          }))
+        );
+        return results;
+      }),
   }),
 });
 

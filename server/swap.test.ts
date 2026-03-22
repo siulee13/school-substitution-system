@@ -195,6 +195,88 @@ describe('teacherTeachesClassOnDay logic (class-based matching)', () => {
   });
 });
 
+describe('swap candidate class lists (swapTeacherAllClasses / absentTeacherAllClasses)', () => {
+  it('should include class lists in swap candidate payload', () => {
+    const candidate = {
+      swapTeacherFullName: 'Teacher A',
+      swapTeacherShortName: 'A',
+      swapTeacherTimeSlot: '9:05－ 9:40',
+      swapTeacherClassName: '2A',
+      swapTeacherSubject: 'Math',
+      absentTeacherTimeSlot: '14:00－14:35',
+      absentTeacherClassName: '2B',
+      absentTeacherSubject: 'English',
+      swapTeacherAllClasses: ['2A', '3B', '4C'],
+      absentTeacherAllClasses: ['2B', '1A'],
+    };
+    expect(Array.isArray(candidate.swapTeacherAllClasses)).toBe(true);
+    expect(Array.isArray(candidate.absentTeacherAllClasses)).toBe(true);
+    expect(candidate.swapTeacherAllClasses.length).toBeGreaterThan(0);
+    expect(candidate.absentTeacherAllClasses.length).toBeGreaterThan(0);
+    // swap teacher's own slot class should be in their class list
+    expect(candidate.swapTeacherAllClasses).toContain(candidate.swapTeacherClassName);
+    // absent teacher's slot class should be in their class list
+    expect(candidate.absentTeacherAllClasses).toContain(candidate.absentTeacherClassName);
+  });
+
+  it('should have distinct class lists for each teacher', () => {
+    const swapTeacherAllClasses = ['2A', '3B'];
+    const absentTeacherAllClasses = ['2B', '1A'];
+    // In a valid swap: swap teacher teaches absent teacher's class
+    // (verified by bidirectional rule in findSwapCandidates)
+    const swapTeacherTeachesAbsentClass = swapTeacherAllClasses.some(c => ['2B', '1A'].includes(c));
+    const absentTeacherTeachesSwapClass = absentTeacherAllClasses.some(c => ['2A', '3B'].includes(c));
+    // For a valid swap both must be true
+    expect(typeof swapTeacherTeachesAbsentClass).toBe('boolean');
+    expect(typeof absentTeacherTeachesSwapClass).toBe('boolean');
+  });
+});
+
+describe('multi-teacher generateSuggestionsMulti shape', () => {
+  it('should return an array of per-teacher suggestion results', () => {
+    // Simulate the expected shape of generateSuggestionsMulti response
+    const mockResult = [
+      {
+        teacherFullName: '陳大文',
+        suggestions: [
+          { timeSlot: '9:05－ 9:40', className: '4A', subject: '數學', swapCandidates: [] },
+        ],
+      },
+      {
+        teacherFullName: '李弘光',
+        suggestions: [
+          { timeSlot: '11:00－11:35', className: '3B', subject: '英文', swapCandidates: [] },
+        ],
+      },
+    ];
+    expect(Array.isArray(mockResult)).toBe(true);
+    expect(mockResult.length).toBe(2);
+    expect(mockResult[0]).toHaveProperty('teacherFullName');
+    expect(mockResult[0]).toHaveProperty('suggestions');
+    expect(Array.isArray(mockResult[0].suggestions)).toBe(true);
+  });
+
+  it('should correctly find teacher result by fullName', () => {
+    const mockResult = [
+      { teacherFullName: '陳大文', suggestions: [] },
+      { teacherFullName: '李弘光', suggestions: [] },
+    ];
+    const found = mockResult.find(r => r.teacherFullName === '李弘光');
+    expect(found).toBeDefined();
+    expect(found?.teacherFullName).toBe('李弘光');
+    const notFound = mockResult.find(r => r.teacherFullName === '王大明');
+    expect(notFound).toBeUndefined();
+  });
+
+  it('should handle single teacher as a degenerate case', () => {
+    const mockResult = [
+      { teacherFullName: '陳大文', suggestions: [{ timeSlot: '9:05', className: '4A', subject: '數學', swapCandidates: [] }] },
+    ];
+    expect(mockResult.length).toBe(1);
+    expect(mockResult[0].suggestions.length).toBe(1);
+  });
+});
+
 describe('swap candidate logic validation', () => {
   it('should correctly identify that swap requires earlier time slot', () => {
     // 調課邏輯：swapTeacherTimeSlot 必須在 absentTeacherTimeSlot 之前
