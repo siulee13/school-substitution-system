@@ -42,20 +42,20 @@ export async function getTeacherClassesByDate(
   date: Date
 ): Promise<Array<{ timeSlot: string; class: string; subject: string; location?: string }>> {
   try {
-    const dayOfWeekChinese = ['日', '一', '二', '三', '四', '五', '六'][date.getDay()];
+    const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
 
     const db = getTeacherDb();
     const stmt = db.prepare(`
-      SELECT time_slot, class, subject FROM timetable 
-      WHERE teacher_name = ? AND day_of_week = ? 
-      ORDER BY CAST(SUBSTR(time_slot, 1, INSTR(time_slot, '-') - 1) AS INTEGER)
+      SELECT Time as timeSlot, Content as subject FROM timetable 
+      WHERE Teacher = ? AND Day = ?
+      ORDER BY Time
     `);
-    const rows = stmt.all(teacherFullName, dayOfWeekChinese) as any[];
+    const rows = stmt.all(teacherFullName, dayOfWeek) as any[];
     db.close();
 
     return rows.map(row => ({
-      timeSlot: row.time_slot,
-      class: row.class,
+      timeSlot: row.timeSlot,
+      class: 'N/A', // 從 timetable 表無法直接獲得班別，需要從 Content 中解析
       subject: row.subject,
     }));
   } catch (error) {
@@ -70,14 +70,14 @@ export async function getAvailableTeachers(
   timeSlot: string
 ): Promise<Array<{ fullName: string; shortName: string }>> {
   try {
-    const dayOfWeek = ['日', '一', '二', '三', '四', '五', '六'][date.getDay()];
+    const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
 
     const db = getTeacherDb();
     const stmt = db.prepare(`
       SELECT DISTINCT full_name, short_name FROM teacher_names 
       WHERE full_name NOT IN (
-        SELECT teacher_name FROM timetable 
-        WHERE day_of_week = ? AND time_slot = ?
+        SELECT Teacher FROM timetable 
+        WHERE Day = ? AND Time = ?
       )
       ORDER BY full_name
     `);

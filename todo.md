@@ -7,6 +7,7 @@
 - [x] 實現 tRPC procedure：根據日期及時間段查詢空堂老師
 - [x] 實現 tRPC procedure：根據班別查詢科任老師
 - [x] 實現 tRPC procedure：生成代課建議（整合空堂老師及科任老師篩選邏輯）
+- [x] 修復資料庫列名不匹配問題（Teacher、Time、Day、Content 等）
 - [ ] 編寫後端單元測試（因 native 模組編譯問題，測試暫時無法執行）
 
 ## 前端開發

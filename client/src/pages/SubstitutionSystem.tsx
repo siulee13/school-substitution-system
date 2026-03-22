@@ -1,19 +1,12 @@
 import { useState } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, ChevronRight } from 'lucide-react';
+import { CalendarIcon, ChevronRight, Loader2 } from 'lucide-react';
 import ClassConfirmation from '@/components/ClassConfirmation';
 import SubstitutionSelection from '@/components/SubstitutionSelection';
 import SubstitutionReport from '@/components/SubstitutionReport';
@@ -82,10 +75,6 @@ export default function SubstitutionSystem() {
     setSubstitutionData(null);
     setFinalReport(null);
   };
-
-  const dayOfWeek = selectedDate
-    ? format(selectedDate, 'EEEE', { locale: zhCN })
-    : '';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4 md:p-8">
@@ -168,29 +157,44 @@ export default function SubstitutionSystem() {
                 </Popover>
               </div>
 
-              {/* 老師選擇下拉選單 */}
+              {/* 老師選擇平面清單 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
                   選擇請假老師 *
                 </label>
-                <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="選擇老師" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teachersLoading ? (
-                      <SelectItem value="loading" disabled>
-                        載入中...
-                      </SelectItem>
-                    ) : (
-                      teachers.map((teacher) => (
-                        <SelectItem key={teacher.fullName} value={teacher.fullName}>
-                          {teacher.fullName} ({teacher.shortName})
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                {teachersLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-blue-600 mr-2" />
+                    <span className="text-gray-600">載入老師列表中...</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-96 overflow-y-auto border border-gray-200 rounded-lg p-4 bg-gray-50">
+                    {teachers.map((teacher) => (
+                      <label
+                        key={teacher.fullName}
+                        className="flex items-center space-x-3 p-3 rounded-lg hover:bg-blue-100 cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="radio"
+                          name="teacher"
+                          value={teacher.fullName}
+                          checked={selectedTeacher === teacher.fullName}
+                          onChange={(e) => setSelectedTeacher(e.target.value)}
+                          className="w-4 h-4 text-blue-600 cursor-pointer"
+                        />
+                        <span className="flex-1">
+                          <span className="font-medium text-gray-900">{teacher.fullName}</span>
+                          <span className="text-gray-500 ml-2">({teacher.shortName})</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {!teachersLoading && teachers.length === 0 && (
+                  <div className="text-center py-8 text-gray-600">
+                    無法載入老師列表
+                  </div>
+                )}
               </div>
 
               {/* 確認按鈕 */}
