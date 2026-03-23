@@ -33,6 +33,7 @@ interface SubstitutionSelectionProps {
   suggestions: SuggestionItem[];
   isLoading: boolean;
   excludedSwapResources?: Set<string>; // 已被前一位老師佔用的調課資源，格式：`${swapTeacherFullName}|||${swapTeacherTimeSlot}`
+  excludedRegularResources?: Set<string>; // 已被前一位老師佔用的普通代課資源，格式：`${teacherFullName}|||${timeSlot}`
   onConfirm: (selections: Record<number, string>) => void;
   onBack: () => void;
 }
@@ -62,6 +63,7 @@ export default function SubstitutionSelection({
   suggestions,
   isLoading,
   excludedSwapResources,
+  excludedRegularResources,
   onConfirm,
   onBack,
 }: SubstitutionSelectionProps) {
@@ -119,6 +121,12 @@ export default function SubstitutionSelection({
   const hasSwapCandidates = availableSwapCandidates.length > 0;
   const currentValue = selections[currentIndex] || '';
   const selectedSwap = currentValue.startsWith(SWAP_PREFIX) ? decodeSwapValue(currentValue) : null;
+
+  // 過濾已被前一位老師佔用的普通代課老師（同一時段不能同時代兩班）
+  const isTeacherExcluded = (teacherFullName: string) => {
+    if (!excludedRegularResources) return false;
+    return excludedRegularResources.has(`${teacherFullName}|||${currentSuggestion.timeSlot}`);
+  };
 
   return (
     <Card>
@@ -251,11 +259,17 @@ export default function SubstitutionSelection({
                   <div className="px-2 py-1.5 text-xs font-semibold text-green-700 bg-green-50">
                     ★ 首選：該班科任老師
                   </div>
-                  {currentSuggestion.priorityTeachers.map((teacher) => (
-                    <SelectItem key={teacher.fullName} value={teacher.fullName}>
-                      {teacher.fullName} ({teacher.shortName}) — {teacher.subject}
-                    </SelectItem>
-                  ))}
+                  {currentSuggestion.priorityTeachers.map((teacher) => {
+                    const excluded = isTeacherExcluded(teacher.fullName);
+                    return (
+                      <SelectItem key={teacher.fullName} value={teacher.fullName} disabled={excluded}>
+                        {excluded
+                          ? `${teacher.fullName} (${teacher.shortName}) — ${teacher.subject} 【此時段已被佔用】`
+                          : `${teacher.fullName} (${teacher.shortName}) — ${teacher.subject}`
+                        }
+                      </SelectItem>
+                    );
+                  })}
                 </>
               )}
 
@@ -265,11 +279,17 @@ export default function SubstitutionSelection({
                   <div className="px-2 py-1.5 text-xs font-semibold text-gray-700 bg-gray-50">
                     次選：其他空堂老師
                   </div>
-                  {currentSuggestion.otherTeachers.map((teacher) => (
-                    <SelectItem key={teacher.fullName} value={teacher.fullName}>
-                      {teacher.fullName} ({teacher.shortName})
-                    </SelectItem>
-                  ))}
+                  {currentSuggestion.otherTeachers.map((teacher) => {
+                    const excluded = isTeacherExcluded(teacher.fullName);
+                    return (
+                      <SelectItem key={teacher.fullName} value={teacher.fullName} disabled={excluded}>
+                        {excluded
+                          ? `${teacher.fullName} (${teacher.shortName}) 【此時段已被佔用】`
+                          : `${teacher.fullName} (${teacher.shortName})`
+                        }
+                      </SelectItem>
+                    );
+                  })}
                 </>
               )}
             </SelectContent>

@@ -362,3 +362,74 @@ describe('swap candidate logic validation', () => {
     expect(swapSlotMinutes).toBeGreaterThanOrEqual(absentSlotMinutes);
   });
 });
+
+describe('excludedRegularResources deduplication logic', () => {
+  // 模擬前端 usedRegularResources 計算邏輯
+  // 格式：`${teacherFullName}|||${timeSlot}`
+  function buildRegularResourceKey(teacherFullName: string, timeSlot: string): string {
+    return `${teacherFullName}|||${timeSlot}`;
+  }
+
+  it('should exclude teacher already assigned to another class at the same time slot', () => {
+    const usedRegularResources = new Set<string>();
+
+    // 第一位請假老師：李弘光，11:20-11:55 選了「洗應輝」代課
+    usedRegularResources.add(buildRegularResourceKey('洗應輝', '11:20－11:55'));
+
+    // 第二位請假老師：李媛璇，11:20-11:55 也想用「洗應輝」
+    const key = buildRegularResourceKey('洗應輝', '11:20－11:55');
+    // 應被排除（同一時段已被佔用）
+    expect(usedRegularResources.has(key)).toBe(true);
+  });
+
+  it('should allow same teacher at a different time slot', () => {
+    const usedRegularResources = new Set<string>();
+
+    // 第一位請假老師：11:20-11:55 選了「洗應輝」
+    usedRegularResources.add(buildRegularResourceKey('洗應輝', '11:20－11:55'));
+
+    // 第二位請假老師：9:05-9:40 想用「洗應輝」（不同時段）
+    const key = buildRegularResourceKey('洗應輝', '9:05－ 9:40');
+    // 不同時段，不應被排除
+    expect(usedRegularResources.has(key)).toBe(false);
+  });
+
+  it('should allow different teacher at the same time slot', () => {
+    const usedRegularResources = new Set<string>();
+
+    // 第一位請假老師：11:20-11:55 選了「洗應輝」
+    usedRegularResources.add(buildRegularResourceKey('洗應輝', '11:20－11:55'));
+
+    // 第二位請假老師：11:20-11:55 想用「陳芷茵」（不同老師）
+    const key = buildRegularResourceKey('陳芷茵', '11:20－11:55');
+    // 不同老師，不應被排除
+    expect(usedRegularResources.has(key)).toBe(false);
+  });
+
+  it('should handle three teachers competing for the same slot', () => {
+    const usedRegularResources = new Set<string>();
+    const timeSlot = '11:20－11:55';
+
+    // 第一位老師選了「洗應輝」
+    usedRegularResources.add(buildRegularResourceKey('洗應輝', timeSlot));
+
+    // 第二位老師選了「陳芷茵」
+    usedRegularResources.add(buildRegularResourceKey('陳芷茵', timeSlot));
+
+    // 第三位老師：「洗應輝」和「陳芷茵」都應被排除
+    expect(usedRegularResources.has(buildRegularResourceKey('洗應輝', timeSlot))).toBe(true);
+    expect(usedRegularResources.has(buildRegularResourceKey('陳芷茵', timeSlot))).toBe(true);
+    // 但「鄧迪敏」未被佔用
+    expect(usedRegularResources.has(buildRegularResourceKey('鄧迪敏', timeSlot))).toBe(false);
+  });
+
+  it('should not exclude swap selections (only regular substitutions)', () => {
+    // swap 選擇（__SWAP__ 開頭）不應加入 usedRegularResources
+    const value = '__SWAP__洗應輝|||11:20－11:55|||5F|||數學';
+    const isSwap = value.startsWith('__SWAP__');
+    const isNone = value === 'none';
+    const isRegular = !isSwap && !isNone && value !== '';
+    // 應為 false，swap 不應被加入普通代課資源集合
+    expect(isRegular).toBe(false);
+  });
+});

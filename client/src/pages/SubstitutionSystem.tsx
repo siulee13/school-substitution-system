@@ -164,6 +164,26 @@ export default function SubstitutionSystem() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [substitutionTeacherIdx, JSON.stringify(allSelections), allowSwap, multiSuggestions]);
 
+  // 計算已被前面老師佔用的普通代課資源（前端去重）
+  // 格式：`${teacherFullName}|||${timeSlot}` —— 同一老師在同一時段不能同時代兩班課
+  const usedRegularResources = useMemo(() => {
+    const used = new Set<string>();
+    if (!multiSuggestions) return used;
+    for (let tIdx = 0; tIdx < substitutionTeacherIdx; tIdx++) {
+      const teacherSelections = allSelections[tIdx] || {};
+      const teacherSuggestions = multiSuggestions[tIdx]?.suggestions || [];
+      for (const [idxStr, value] of Object.entries(teacherSelections)) {
+        const idx = Number(idxStr);
+        const suggestion = teacherSuggestions[idx];
+        if (!suggestion || !value || value === 'none' || value.startsWith('__SWAP__')) continue;
+        // value 是普通代課老師的 fullName
+        used.add(`${value}|||${suggestion.timeSlot}`);
+      }
+    }
+    return used;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [substitutionTeacherIdx, JSON.stringify(allSelections), multiSuggestions]);
+
   // 更新某位老師的欄位
   const updateTeacher = (id: string, field: keyof AbsentTeacherEntry, value: string) => {
     setAbsentTeachers(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
@@ -659,6 +679,7 @@ export default function SubstitutionSystem() {
               suggestions={currentSuggestions}
               isLoading={isSuggestionsLoading}
               excludedSwapResources={usedSwapResources}
+              excludedRegularResources={usedRegularResources}
               onConfirm={handleCompleteSubstitutionForTeacher}
               onBack={() => {
                 if (substitutionTeacherIdx > 0) {
