@@ -674,6 +674,7 @@ export default function SubstitutionSystem() {
               </div>
             )}
             <SubstitutionSelection
+              key={`${currentSubstTeacher.fullName}-${substitutionTeacherIdx}`}
               absentTeacher={currentSubstTeacher.fullName}
               date={selectedDate || new Date()}
               suggestions={currentSuggestions}
