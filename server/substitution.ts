@@ -243,12 +243,16 @@ async function findSwapCandidates(
   absentTeacherFullName: string,
   absentClasses: Array<{ timeSlot: string; className: string; subject: string }>,
   /** 已被其他請假老師佔用的調課資源，格式：`${swapTeacherFullName}|||${swapTeacherTimeSlot}` */
-  excludedSwapResources: Set<string> = new Set()
+  excludedSwapResources: Set<string> = new Set(),
+  /** 請假老師當日全部課堂（用於判斷空堂，不受時段篩選影響） */
+  allAbsentClasses?: Array<{ timeSlot: string; className: string; subject: string }>
 ): Promise<SwapCandidate[]> {
   const db = await getTeacherDb();
 
   // 請假老師當日所有課堂的時段集合（用於判斷哪些時段是空堂）
-  const absentTeacherBusySlots = new Set(absentClasses.map(c => c.timeSlot));
+  // 必須用全日課堂（allAbsentClasses），而非只用需要代課的課堂（absentClasses）
+  // 否則全日請假時 absentClasses 包含全部課堂，導致幾乎找不到「請假老師在 T1 空堂」的情況
+  const absentTeacherBusySlots = new Set((allAbsentClasses ?? absentClasses).map(c => c.timeSlot));
 
   /**
    * 檢查 teacherFullName 在同日是否有教 className 這一班（不論科目）
@@ -435,7 +439,9 @@ export async function generateSuggestions(
     // 調課候選（allowSwap 時計算）
     let swapCandidatesList: SwapCandidate[] = [];
     if (allowSwap && targetClasses.length > 0) {
-      swapCandidatesList = await findSwapCandidates(dayOfWeek, absentTeacherFullName, targetClasses, excludedSwapResources);
+      // 傳入 allClasses 作為全日課堂參考，確保空堂判斷正確
+      // （全日請假時 targetClasses === allClasses，但指定時段時 targetClasses 是子集）
+      swapCandidatesList = await findSwapCandidates(dayOfWeek, absentTeacherFullName, targetClasses, excludedSwapResources, allClasses);
     }
 
     const suggestions: SuggestionItem[] = [];

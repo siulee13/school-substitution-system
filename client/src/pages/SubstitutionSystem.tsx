@@ -101,6 +101,28 @@ export default function SubstitutionSystem() {
     }
   );
 
+  // 根據請假類型篩選確認課堂：指定時段只顯示受影響的課堂
+  const filteredClassesByDate = useMemo(() => {
+    if (!classesByDate || !currentConfirmTeacher) return classesByDate || [];
+    if (currentConfirmTeacher.absenceType === 'fullday') return classesByDate;
+    const { startTime, endTime } = currentConfirmTeacher;
+    if (!startTime && !endTime) return classesByDate;
+    return classesByDate.filter(cls => {
+      // 使用與後端相同的 isSlotInRange 邏輯
+      const parts = cls.timeSlot.split(/[-－]/);
+      if (parts.length < 2) return true;
+      const parseMin = (s: string) => {
+        const m = s.trim().match(/(\d{1,2}):(\d{2})/);
+        return m ? parseInt(m[1]) * 60 + parseInt(m[2]) : 0;
+      };
+      const slotStart = parseMin(parts[0]);
+      const slotEnd = parseMin(parts[parts.length - 1]);
+      const rangeStart = startTime ? parseMin(startTime) : 0;
+      const rangeEnd = endTime ? parseMin(endTime) : 24 * 60;
+      return slotStart < rangeEnd && slotEnd > rangeStart;
+    });
+  }, [classesByDate, currentConfirmTeacher]);
+
   // 第三步：使用 generateSuggestionsMulti 查詢所有老師的代課建議
   // 穩定化 validTeachers，避免每次 render 產生新陣列引用
   const validTeachers = useMemo(
@@ -642,7 +664,7 @@ export default function SubstitutionSystem() {
             <ClassConfirmation
               teacher={currentConfirmTeacher.fullName}
               date={selectedDate}
-              classes={classesByDate || []}
+              classes={filteredClassesByDate}
               isLoading={classesLoading}
               absenceType={currentConfirmTeacher.absenceType}
               startTime={currentConfirmTeacher.startTime}

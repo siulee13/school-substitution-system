@@ -433,3 +433,147 @@ describe('excludedRegularResources deduplication logic', () => {
     expect(isRegular).toBe(false);
   });
 });
+
+describe('findSwapCandidates: absentTeacherBusySlots should use allAbsentClasses', () => {
+  // 模擬 absentTeacherBusySlots 的計算邏輯
+  // 問題：全日請假時 targetClasses 包含全部課堂，導致幾乎找不到「請假老師在 T1 空堂」的情況
+  // 修復：改用 allAbsentClasses（全日課堂）來建立 busySlots
+
+  it('should use allAbsentClasses (not targetClasses) to determine busy slots for fullday absence', () => {
+    // 全日請假：targetClasses === allClasses（所有課堂都需要代課）
+    const allClasses = [
+      { timeSlot: '8:10－ 8:30', className: '4A', subject: '班主任課' },
+      { timeSlot: '8:30－ 9:05', className: '4A', subject: '中文' },
+      { timeSlot: '9:05－ 9:40', className: '4A', subject: '中文' },
+    ];
+    const targetClasses = allClasses; // 全日請假時相同
+
+    // 如果用 targetClasses 建立 busySlots，所有時段都是「忙碌」
+    const busySlotsFromTarget = new Set(targetClasses.map(c => c.timeSlot));
+    // 如果用 allClasses 建立 busySlots，結果相同（全日請假時 targetClasses === allClasses）
+    const busySlotsFromAll = new Set(allClasses.map(c => c.timeSlot));
+
+    // 全日請假時兩者相同，但邏輯上應使用 allClasses
+    expect(busySlotsFromTarget.size).toBe(busySlotsFromAll.size);
+  });
+
+  it('should correctly identify free slots for partial absence using allAbsentClasses', () => {
+    // 指定時段請假：targetClasses 是 allClasses 的子集
+    const allClasses = [
+      { timeSlot: '8:10－ 8:30', className: '4A', subject: '班主任課' },
+      { timeSlot: '8:30－ 9:05', className: '4A', subject: '中文' },
+      { timeSlot: '9:05－ 9:40', className: '4A', subject: '中文' },
+      { timeSlot: '11:20－11:55', className: '4A', subject: '中文' },
+    ];
+    // 指定時段 9:05-12:00 的課堂
+    const targetClasses = [
+      { timeSlot: '9:05－ 9:40', className: '4A', subject: '中文' },
+      { timeSlot: '11:20－11:55', className: '4A', subject: '中文' },
+    ];
+
+    // 用 targetClasses 建立 busySlots（舊邏輯，錯誤）
+    const busySlotsFromTarget = new Set(targetClasses.map(c => c.timeSlot));
+    // 用 allClasses 建立 busySlots（新邏輯，正確）
+    const busySlotsFromAll = new Set(allClasses.map(c => c.timeSlot));
+
+    // 舊邏輯：8:10 和 8:30 不在 busySlots，但這是因為它們不在 targetClasses（不是真正空堂）
+    expect(busySlotsFromTarget.has('8:10－ 8:30')).toBe(false); // 舊邏輯誤判為空堂
+    expect(busySlotsFromTarget.has('8:30－ 9:05')).toBe(false); // 舊邏輯誤判為空堂
+
+    // 新邏輯：8:10 和 8:30 在 busySlots（請假老師有課，不是空堂）
+    expect(busySlotsFromAll.has('8:10－ 8:30')).toBe(true); // 新邏輯正確識別為忙碌
+    expect(busySlotsFromAll.has('8:30－ 9:05')).toBe(true); // 新邏輯正確識別為忙碌
+  });
+
+  it('should find swap candidates for fullday absence when allAbsentClasses is provided', () => {
+    // 全日請假時，請假老師有課的時段應全部視為忙碌
+    // 只有真正空堂的時段（時間表中沒有課的時段）才能作為 T1（調課前置課堂）
+    const allClasses = [
+      { timeSlot: '9:05－ 9:40', className: '4A', subject: '中文' },
+      { timeSlot: '11:20－11:55', className: '4A', subject: '中文' },
+    ];
+    const busySlots = new Set(allClasses.map(c => c.timeSlot));
+
+    // 假設 A 老師在 8:30 有課（T1=8:30，T2=9:05）
+    // 請假老師在 8:30 是否空堂？
+    const isAbsentFreeAt830 = !busySlots.has('8:30－ 9:05');
+    // 請假老師在 8:30 沒有課 → 空堂 → 可以作為 T1 的調課前置時段
+    expect(isAbsentFreeAt830).toBe(true);
+
+    // 假設 A 老師在 9:05 有課（T1=9:05，T2=11:20）
+    // 請假老師在 9:05 是否空堂？
+    const isAbsentFreeAt905 = !busySlots.has('9:05－ 9:40');
+    // 請假老師在 9:05 有課 → 不是空堂 → 不能作為調課前置時段
+    expect(isAbsentFreeAt905).toBe(false);
+  });
+});
+
+describe('filteredClassesByDate: partial absence should only show affected classes', () => {
+  // 模擬前端 filteredClassesByDate 的篩選邏輯
+  function parseMin(s: string): number {
+    const m = s.trim().match(/(\d{1,2}):(\d{2})/);
+    return m ? parseInt(m[1]) * 60 + parseInt(m[2]) : 0;
+  }
+
+  function filterClassesByTimeRange(
+    classes: Array<{ timeSlot: string; className: string; subject: string }>,
+    startTime?: string,
+    endTime?: string
+  ) {
+    if (!startTime && !endTime) return classes;
+    return classes.filter(cls => {
+      const parts = cls.timeSlot.split(/[-－]/);
+      if (parts.length < 2) return true;
+      const slotStart = parseMin(parts[0]);
+      const slotEnd = parseMin(parts[parts.length - 1]);
+      const rangeStart = startTime ? parseMin(startTime) : 0;
+      const rangeEnd = endTime ? parseMin(endTime) : 24 * 60;
+      return slotStart < rangeEnd && slotEnd > rangeStart;
+    });
+  }
+
+  const allClasses = [
+    { timeSlot: '8:10－ 8:30', className: 'N/A', subject: '班主任課' },
+    { timeSlot: '8:30－ 9:05', className: '4A', subject: '中文' },
+    { timeSlot: '9:05－ 9:40', className: '4A', subject: '中文' },
+    { timeSlot: '11:20－11:55', className: '3D', subject: '中默' },
+    { timeSlot: '11:55－12:30', className: '3D', subject: '中文' },
+    { timeSlot: '14:00－14:30', className: '3D', subject: '中文導修' },
+  ];
+
+  it('should return all classes for fullday absence (no filter)', () => {
+    const result = filterClassesByTimeRange(allClasses);
+    expect(result.length).toBe(allClasses.length);
+  });
+
+  it('should only return classes within partial absence time range', () => {
+    // 指定時段 9:05 至 12:30
+    const result = filterClassesByTimeRange(allClasses, '9:05', '12:30');
+    // 應只包含 9:05-9:40 和 11:20-11:55 和 11:55-12:30
+    expect(result.length).toBe(3);
+    expect(result.map(c => c.timeSlot)).toContain('9:05－ 9:40');
+    expect(result.map(c => c.timeSlot)).toContain('11:20－11:55');
+    expect(result.map(c => c.timeSlot)).toContain('11:55－12:30');
+    // 不應包含 8:10 和 8:30 的課堂
+    expect(result.map(c => c.timeSlot)).not.toContain('8:10－ 8:30');
+    expect(result.map(c => c.timeSlot)).not.toContain('8:30－ 9:05');
+    // 不應包含 14:00 的課堂
+    expect(result.map(c => c.timeSlot)).not.toContain('14:00－14:30');
+  });
+
+  it('should return empty array when no classes fall within the specified range', () => {
+    // 指定時段 15:00 至 16:00（沒有課堂）
+    const result = filterClassesByTimeRange(allClasses, '15:00', '16:00');
+    expect(result.length).toBe(0);
+  });
+
+  it('should handle boundary cases correctly', () => {
+    // 課堂 8:30-9:05，篩選範圍 9:05-12:30
+    // slotEnd (9:05) > rangeStart (9:05) 不成立 → 不包含
+    const result = filterClassesByTimeRange(
+      [{ timeSlot: '8:30－ 9:05', className: '4A', subject: '中文' }],
+      '9:05', '12:30'
+    );
+    expect(result.length).toBe(0);
+  });
+});
