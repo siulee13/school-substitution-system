@@ -1,31 +1,32 @@
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, ChevronLeft, ChevronRight, Loader2, ArrowLeftRight } from 'lucide-react';
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  ArrowLeftRight,
+} from "lucide-react";
 
-interface SwapCandidate {
-  swapTeacherFullName: string;
-  swapTeacherShortName: string;
-  swapTeacherTimeSlot: string;
-  swapTeacherClassName: string;
-  swapTeacherSubject: string;
-  absentTeacherTimeSlot: string;
-  absentTeacherClassName: string;
-  absentTeacherSubject: string;
-  swapTeacherAllClasses?: string[];
-  absentTeacherAllClasses?: string[];
-}
-
-interface SuggestionItem {
-  timeSlot: string;
-  className: string;
-  subject: string;
-  priorityTeachers: Array<{ fullName: string; shortName: string; subject: string }>;
-  otherTeachers: Array<{ fullName: string; shortName: string }>;
-  swapCandidates: SwapCandidate[];
-}
+import type {
+  SuggestionItem,
+  SwapCandidate,
+} from "@/features/substitution/types";
 
 interface SubstitutionSelectionProps {
   absentTeacher: string;
@@ -39,15 +40,21 @@ interface SubstitutionSelectionProps {
 }
 
 // 調課選項的特殊值前綴
-const SWAP_PREFIX = '__SWAP__';
+const SWAP_PREFIX = "__SWAP__";
 
 function encodeSwapValue(candidate: SwapCandidate): string {
   return `${SWAP_PREFIX}${candidate.swapTeacherFullName}|||${candidate.swapTeacherTimeSlot}|||${candidate.swapTeacherClassName}|||${candidate.swapTeacherSubject}`;
 }
 
-export function decodeSwapValue(value: string): { isSwap: boolean; swapTeacherFullName?: string; swapTeacherTimeSlot?: string; swapTeacherClassName?: string; swapTeacherSubject?: string } {
+export function decodeSwapValue(value: string): {
+  isSwap: boolean;
+  swapTeacherFullName?: string;
+  swapTeacherTimeSlot?: string;
+  swapTeacherClassName?: string;
+  swapTeacherSubject?: string;
+} {
   if (!value.startsWith(SWAP_PREFIX)) return { isSwap: false };
-  const parts = value.slice(SWAP_PREFIX.length).split('|||');
+  const parts = value.slice(SWAP_PREFIX.length).split("|||");
   return {
     isSwap: true,
     swapTeacherFullName: parts[0],
@@ -77,7 +84,8 @@ export default function SubstitutionSelection({
   };
 
   const handleNext = () => {
-    if (currentIndex < suggestions.length - 1) setCurrentIndex(currentIndex + 1);
+    if (currentIndex < suggestions.length - 1)
+      setCurrentIndex(currentIndex + 1);
   };
 
   const handlePrev = () => {
@@ -113,19 +121,24 @@ export default function SubstitutionSelection({
   }
 
   // 過濾已被前一位老師佔用的調課候選
-  const availableSwapCandidates = currentSuggestion.swapCandidates?.filter(swap => {
-    if (!excludedSwapResources) return true;
-    const key = `${swap.swapTeacherFullName}|||${swap.swapTeacherTimeSlot}`;
-    return !excludedSwapResources.has(key);
-  }) || [];
+  const availableSwapCandidates =
+    currentSuggestion.swapCandidates?.filter(swap => {
+      if (!excludedSwapResources) return true;
+      const key = `${swap.swapTeacherFullName}|||${swap.swapTeacherTimeSlot}`;
+      return !excludedSwapResources.has(key);
+    }) || [];
   const hasSwapCandidates = availableSwapCandidates.length > 0;
-  const currentValue = selections[currentIndex] || '';
-  const selectedSwap = currentValue.startsWith(SWAP_PREFIX) ? decodeSwapValue(currentValue) : null;
+  const currentValue = selections[currentIndex] || "";
+  const selectedSwap = currentValue.startsWith(SWAP_PREFIX)
+    ? decodeSwapValue(currentValue)
+    : null;
 
   // 過濾已被前一位老師佔用的普通代課老師（同一時段不能同時代兩班）
   const isTeacherExcluded = (teacherFullName: string) => {
     if (!excludedRegularResources) return false;
-    return excludedRegularResources.has(`${teacherFullName}|||${currentSuggestion.timeSlot}`);
+    return excludedRegularResources.has(
+      `${teacherFullName}|||${currentSuggestion.timeSlot}`
+    );
   };
 
   return (
@@ -141,11 +154,15 @@ export default function SubstitutionSelection({
         <div className="bg-gray-50 rounded-lg p-4 grid grid-cols-3 gap-4 border border-gray-200">
           <div>
             <p className="text-sm text-gray-600">時間</p>
-            <p className="font-semibold text-lg">{currentSuggestion.timeSlot}</p>
+            <p className="font-semibold text-lg">
+              {currentSuggestion.timeSlot}
+            </p>
           </div>
           <div>
             <p className="text-sm text-gray-600">班別</p>
-            <p className="font-semibold text-lg">{currentSuggestion.className}</p>
+            <p className="font-semibold text-lg">
+              {currentSuggestion.className}
+            </p>
           </div>
           <div>
             <p className="text-sm text-gray-600">科目</p>
@@ -158,7 +175,9 @@ export default function SubstitutionSelection({
           <div className="rounded-lg border-2 border-purple-300 bg-purple-50 overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-2 bg-purple-100 border-b border-purple-200">
               <ArrowLeftRight className="h-4 w-4 text-purple-700" />
-              <span className="text-sm font-semibold text-purple-800">調課建議（優先）</span>
+              <span className="text-sm font-semibold text-purple-800">
+                調課建議（優先）
+              </span>
             </div>
             <div className="p-3 space-y-2">
               {availableSwapCandidates.map((swap, idx) => {
@@ -167,57 +186,86 @@ export default function SubstitutionSelection({
                 return (
                   <button
                     key={idx}
-                    onClick={() => handleSelectTeacher(isSelected ? '' : swapValue)}
+                    onClick={() =>
+                      handleSelectTeacher(isSelected ? "" : swapValue)
+                    }
                     className={`w-full text-left rounded-lg p-3 border-2 transition-colors ${
                       isSelected
-                        ? 'border-purple-500 bg-purple-100'
-                        : 'border-purple-200 bg-white hover:border-purple-400 hover:bg-purple-50'
+                        ? "border-purple-500 bg-purple-100"
+                        : "border-purple-200 bg-white hover:border-purple-400 hover:bg-purple-50"
                     }`}
                   >
                     <div className="flex items-start gap-2">
-                      <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${isSelected ? 'border-purple-600 bg-purple-600' : 'border-gray-400'}`}>
-                        {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                      <div
+                        className={`mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${isSelected ? "border-purple-600 bg-purple-600" : "border-gray-400"}`}
+                      >
+                        {isSelected && (
+                          <div className="w-2 h-2 rounded-full bg-white" />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         {/* 調課說明：請假老師去代 A 老師的課 */}
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-semibold text-purple-900">
-                            {swap.swapTeacherFullName}（{swap.swapTeacherShortName}）
+                            {swap.swapTeacherFullName}（
+                            {swap.swapTeacherShortName}）
                           </span>
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-purple-200 text-purple-800">調課</span>
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-purple-200 text-purple-800">
+                            調課
+                          </span>
                         </div>
                         {/* 步驟一：請假老師去代 A 老師的課 */}
                         <p className="text-xs text-gray-600 mt-1">
-                          <span className="font-medium text-blue-700">{absentTeacher}</span>
-                          {' '}先於 {swap.swapTeacherTimeSlot} 代替{' '}
-                          <span className="font-medium">{swap.swapTeacherFullName}</span>
-                          {' '}上 {swap.swapTeacherClassName} {swap.swapTeacherSubject}
+                          <span className="font-medium text-blue-700">
+                            {absentTeacher}
+                          </span>{" "}
+                          先於 {swap.swapTeacherTimeSlot} 代替{" "}
+                          <span className="font-medium">
+                            {swap.swapTeacherFullName}
+                          </span>{" "}
+                          上 {swap.swapTeacherClassName}{" "}
+                          {swap.swapTeacherSubject}
                         </p>
                         {/* 步驟二：A 老師代請假老師的課 */}
                         <p className="text-xs text-gray-600 mt-0.5">
-                          <span className="font-medium text-purple-700">{swap.swapTeacherFullName}</span>
-                          {' '}於 {swap.absentTeacherTimeSlot} 代替{' '}
-                          <span className="font-medium">{absentTeacher}</span>
-                          {' '}上 {swap.absentTeacherClassName} {swap.absentTeacherSubject}
+                          <span className="font-medium text-purple-700">
+                            {swap.swapTeacherFullName}
+                          </span>{" "}
+                          於 {swap.absentTeacherTimeSlot} 代替{" "}
+                          <span className="font-medium">{absentTeacher}</span>{" "}
+                          上 {swap.absentTeacherClassName}{" "}
+                          {swap.absentTeacherSubject}
                         </p>
                         <p className="text-xs text-amber-700 mt-1 font-medium">
-                          ⚠ 需要 {absentTeacher} 在請假前於 {swap.swapTeacherTimeSlot} 完成調課
+                          ⚠ 需要 {absentTeacher} 在請假前於{" "}
+                          {swap.swapTeacherTimeSlot} 完成調課
                         </p>
                         {/* 雙方同日班別說明 */}
-                        {(swap.swapTeacherAllClasses?.length || swap.absentTeacherAllClasses?.length) ? (
+                        {swap.swapTeacherAllClasses?.length ||
+                        swap.absentTeacherAllClasses?.length ? (
                           <div className="mt-2 pt-2 border-t border-purple-100 grid grid-cols-2 gap-2">
-                            {swap.swapTeacherAllClasses && swap.swapTeacherAllClasses.length > 0 && (
-                              <div>
-                                <p className="text-xs font-medium text-purple-700">{swap.swapTeacherFullName} 同日教：</p>
-                                <p className="text-xs text-gray-600">{swap.swapTeacherAllClasses.join('、')}</p>
-                              </div>
-                            )}
-                            {swap.absentTeacherAllClasses && swap.absentTeacherAllClasses.length > 0 && (
-                              <div>
-                                <p className="text-xs font-medium text-blue-700">{absentTeacher} 同日教：</p>
-                                <p className="text-xs text-gray-600">{swap.absentTeacherAllClasses.join('、')}</p>
-                              </div>
-                            )}
+                            {swap.swapTeacherAllClasses &&
+                              swap.swapTeacherAllClasses.length > 0 && (
+                                <div>
+                                  <p className="text-xs font-medium text-purple-700">
+                                    {swap.swapTeacherFullName} 同日教：
+                                  </p>
+                                  <p className="text-xs text-gray-600">
+                                    {swap.swapTeacherAllClasses.join("、")}
+                                  </p>
+                                </div>
+                              )}
+                            {swap.absentTeacherAllClasses &&
+                              swap.absentTeacherAllClasses.length > 0 && (
+                                <div>
+                                  <p className="text-xs font-medium text-blue-700">
+                                    {absentTeacher} 同日教：
+                                  </p>
+                                  <p className="text-xs text-gray-600">
+                                    {swap.absentTeacherAllClasses.join("、")}
+                                  </p>
+                                </div>
+                              )}
                           </div>
                         ) : null}
                       </div>
@@ -240,10 +288,10 @@ export default function SubstitutionSelection({
         {/* 代課老師選擇下拉選單 */}
         <div className="space-y-2">
           <label className="block text-sm font-semibold text-gray-700">
-            {hasSwapCandidates ? '或選擇普通代課老師' : '選擇代課老師'}
+            {hasSwapCandidates ? "或選擇普通代課老師" : "選擇代課老師"}
           </label>
           <Select
-            value={currentValue.startsWith(SWAP_PREFIX) ? '' : currentValue}
+            value={currentValue.startsWith(SWAP_PREFIX) ? "" : currentValue}
             onValueChange={handleSelectTeacher}
           >
             <SelectTrigger className="w-full">
@@ -259,14 +307,17 @@ export default function SubstitutionSelection({
                   <div className="px-2 py-1.5 text-xs font-semibold text-green-700 bg-green-50">
                     ★ 首選：該班科任老師
                   </div>
-                  {currentSuggestion.priorityTeachers.map((teacher) => {
+                  {currentSuggestion.priorityTeachers.map(teacher => {
                     const excluded = isTeacherExcluded(teacher.fullName);
                     return (
-                      <SelectItem key={teacher.fullName} value={teacher.fullName} disabled={excluded}>
+                      <SelectItem
+                        key={teacher.fullName}
+                        value={teacher.fullName}
+                        disabled={excluded}
+                      >
                         {excluded
                           ? `${teacher.fullName} (${teacher.shortName}) — ${teacher.subject} 【此時段已被佔用】`
-                          : `${teacher.fullName} (${teacher.shortName}) — ${teacher.subject}`
-                        }
+                          : `${teacher.fullName} (${teacher.shortName}) — ${teacher.subject}`}
                       </SelectItem>
                     );
                   })}
@@ -279,14 +330,17 @@ export default function SubstitutionSelection({
                   <div className="px-2 py-1.5 text-xs font-semibold text-gray-700 bg-gray-50">
                     次選：其他空堂老師
                   </div>
-                  {currentSuggestion.otherTeachers.map((teacher) => {
+                  {currentSuggestion.otherTeachers.map(teacher => {
                     const excluded = isTeacherExcluded(teacher.fullName);
                     return (
-                      <SelectItem key={teacher.fullName} value={teacher.fullName} disabled={excluded}>
+                      <SelectItem
+                        key={teacher.fullName}
+                        value={teacher.fullName}
+                        disabled={excluded}
+                      >
                         {excluded
                           ? `${teacher.fullName} (${teacher.shortName}) 【此時段已被佔用】`
-                          : `${teacher.fullName} (${teacher.shortName})`
-                        }
+                          : `${teacher.fullName} (${teacher.shortName})`}
                       </SelectItem>
                     );
                   })}
@@ -312,7 +366,9 @@ export default function SubstitutionSelection({
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div
             className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${((currentIndex + 1) / suggestions.length) * 100}%` }}
+            style={{
+              width: `${((currentIndex + 1) / suggestions.length) * 100}%`,
+            }}
           />
         </div>
         <p className="text-center text-sm text-gray-600">
@@ -321,21 +377,34 @@ export default function SubstitutionSelection({
 
         {/* 導航按鈕 */}
         <div className="flex gap-3 pt-4">
-          <Button variant="outline" onClick={handlePrev} disabled={currentIndex === 0} className="flex-1">
-            <ChevronLeft className="mr-2 h-4 w-4" />上一節
+          <Button
+            variant="outline"
+            onClick={handlePrev}
+            disabled={currentIndex === 0}
+            className="flex-1"
+          >
+            <ChevronLeft className="mr-2 h-4 w-4" />
+            上一節
           </Button>
           {currentIndex < suggestions.length - 1 ? (
             <Button onClick={handleNext} className="flex-1">
-              下一節<ChevronRight className="ml-2 h-4 w-4" />
+              下一節
+              <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (
-            <Button onClick={handleConfirm} className="flex-1 bg-green-600 hover:bg-green-700">
-              確認並生成報告<ChevronRight className="ml-2 h-4 w-4" />
+            <Button
+              onClick={handleConfirm}
+              className="flex-1 bg-green-600 hover:bg-green-700"
+            >
+              確認並生成報告
+              <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
           )}
         </div>
 
-        <Button variant="outline" onClick={onBack} className="w-full">返回</Button>
+        <Button variant="outline" onClick={onBack} className="w-full">
+          返回
+        </Button>
       </CardContent>
     </Card>
   );
