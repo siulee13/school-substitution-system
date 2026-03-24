@@ -47,12 +47,8 @@ export default function SubstitutionSystem() {
   const [confirmationIdx, setConfirmationIdx] = useState(0);
   const [substitutionTeacherIdx, setSubstitutionTeacherIdx] = useState(0);
   const [allSelections, setAllSelections] = useState<AllSelections>({});
-
-  const {
-    data: teachers = [],
-    isLoading: teachersLoading,
-    isFetching: teachersFetching,
-  } = trpc.substitution.getAllTeachers.useQuery();
+  // 查詢所有老師
+  const { data: teachers = [], isLoading: teachersLoading, isFetching: teachersFetching, isError: teachersError, refetch: refetchTeachers } = trpc.substitution.getAllTeachers.useQuery(undefined, { retry: 1 });
 
   const localDateStr = useMemo(
     () => toLocalDateStr(selectedDate),
@@ -235,6 +231,8 @@ export default function SubstitutionSystem() {
             teachers={teachers}
             teachersLoading={teachersLoading}
             teachersFetching={teachersFetching}
+            teachersError={teachersError}
+            onRetryTeachers={refetchTeachers}
             canProceed={canProceed}
             isMultiTeacher={isMultiTeacher}
             onSelectedDateChange={setSelectedDate}

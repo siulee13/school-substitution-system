@@ -45,6 +45,8 @@ interface SubstitutionInputStepProps {
   teachers: TeacherOption[];
   teachersLoading: boolean;
   teachersFetching: boolean;
+  teachersError: boolean;
+  onRetryTeachers: () => void;
   canProceed: boolean;
   isMultiTeacher: boolean;
   onSelectedDateChange: (date: Date | undefined) => void;
@@ -68,6 +70,8 @@ export default function SubstitutionInputStep({
   teachers,
   teachersLoading,
   teachersFetching,
+  teachersError,
+  onRetryTeachers,
   canProceed,
   isMultiTeacher,
   onSelectedDateChange,
@@ -194,7 +198,21 @@ export default function SubstitutionInputStep({
                     )}
                   </div>
 
-                  {teachersLoading || teachersFetching ? (
+                  {teachersError ? (
+                    <div className="flex flex-col items-center gap-2 py-4">
+                      <span className="text-sm text-red-500">載入老師列表失敗，請檢查網絡連接</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={onRetryTeachers}
+                        className="flex items-center gap-1.5 text-sm"
+                      >
+                        <Loader2 className="h-3.5 w-3.5" />
+                        重試
+                      </Button>
+                    </div>
+                  ) : teachersLoading || teachersFetching ? (
                     <div className="flex items-center py-2">
                       <Loader2 className="h-4 w-4 animate-spin text-blue-600 mr-2" />
                       <span className="text-sm text-gray-600">
