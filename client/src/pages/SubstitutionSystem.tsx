@@ -330,6 +330,19 @@ export default function SubstitutionSystem() {
     }
   };
 
+  const handleUpdateReportRow = (idx: number, newTeacher: string) => {
+    setFinalReport(prev => prev.map((row, i) => {
+      if (i !== idx) return row;
+      // 修改後清除調課標記（改為普通代課）
+      return {
+        ...row,
+        substitutionTeacher: newTeacher,
+        isSwap: false,
+        swapNote: undefined,
+      };
+    }));
+  };
+
   const handleReset = () => {
     setStep('input');
     setSelectedDate(getNextWeekday());
@@ -767,6 +780,7 @@ export default function SubstitutionSystem() {
             report={finalReport}
             dateStr={localDateStr}
             onReset={handleReset}
+            onUpdateRow={handleUpdateReportRow}
           />
         )}
       </div>

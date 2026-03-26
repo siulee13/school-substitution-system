@@ -1,8 +1,11 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CheckCircle, Download, RotateCcw, ArrowLeftRight, Save, CheckCheck } from 'lucide-react';
-import { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { CheckCircle, Download, RotateCcw, ArrowLeftRight, Save, CheckCheck, Pencil } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import { trpc } from '@/lib/trpc';
 
 export interface ReportRow {
@@ -22,14 +25,47 @@ interface SubstitutionReportProps {
   report: ReportRow[];
   dateStr: string; // YYYY-MM-DD 格式
   onReset: () => void;
+  onUpdateRow?: (idx: number, newTeacher: string) => void;
 }
 
-export default function SubstitutionReport({ report, dateStr, onReset }: SubstitutionReportProps) {
+interface EditDialogState {
+  open: boolean;
+  rowIdx: number;
+  row: ReportRow | null;
+  newTeacher: string;
+  searchQuery: string;
+}
+
+export default function SubstitutionReport({ report, dateStr, onReset, onUpdateRow }: SubstitutionReportProps) {
   const swapCount = report.filter(r => r.isSwap).length;
   const normalCount = report.filter(r => !r.isSwap && r.substitutionTeacher !== '無需代課').length;
   const hasMultiTeacher = report.some(r => r.absentTeacher);
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  // 修改對話框狀態
+  const [editDialog, setEditDialog] = useState<EditDialogState>({
+    open: false,
+    rowIdx: -1,
+    row: null,
+    newTeacher: '',
+    searchQuery: '',
+  });
+
+  // 查詢所有老師（用於修改對話框的選擇）
+  const { data: allTeachers = [] } = trpc.substitution.getAllTeachers.useQuery(
+    undefined,
+    { staleTime: Infinity }
+  );
+
+  // 根據搜尋關鍵字篩選老師
+  const filteredTeachers = useMemo(() => {
+    const q = editDialog.searchQuery.trim().toLowerCase();
+    if (!q) return allTeachers;
+    return allTeachers.filter(t =>
+      t.fullName.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q)
+    );
+  }, [allTeachers, editDialog.searchQuery]);
 
   const saveRecord = trpc.substitution.saveRecord.useMutation({
     onSuccess: () => setSaveStatus('saved'),
@@ -79,6 +115,29 @@ export default function SubstitutionReport({ report, dateStr, onReset }: Substit
     document.body.removeChild(element);
   };
 
+  const openEditDialog = (idx: number, row: ReportRow) => {
+    setEditDialog({
+      open: true,
+      rowIdx: idx,
+      row,
+      newTeacher: row.substitutionTeacher === '無需代課' ? 'none' : row.substitutionTeacher,
+      searchQuery: '',
+    });
+  };
+
+  const closeEditDialog = () => {
+    setEditDialog(prev => ({ ...prev, open: false, searchQuery: '' }));
+  };
+
+  const handleConfirmEdit = () => {
+    if (editDialog.rowIdx < 0 || !onUpdateRow) return;
+    const teacherValue = editDialog.newTeacher === 'none' ? '無需代課' : editDialog.newTeacher;
+    onUpdateRow(editDialog.rowIdx, teacherValue);
+    // 儲存狀態重置（因為報告已修改）
+    setSaveStatus('idle');
+    closeEditDialog();
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -115,6 +174,7 @@ export default function SubstitutionReport({ report, dateStr, onReset }: Substit
               <TableHead className="text-center">科目</TableHead>
               <TableHead className="text-center">代課/調課老師</TableHead>
               <TableHead className="text-center">備註</TableHead>
+              {onUpdateRow && <TableHead className="text-center w-16">修改</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -146,6 +206,19 @@ export default function SubstitutionReport({ report, dateStr, onReset }: Substit
                     <span className="text-purple-600 font-medium">{row.swapNote}</span>
                   ) : '—'}
                 </TableCell>
+                {onUpdateRow && (
+                  <TableCell className="text-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+                      onClick={() => openEditDialog(idx, row)}
+                      title="修改代課老師"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
@@ -199,6 +272,77 @@ export default function SubstitutionReport({ report, dateStr, onReset }: Substit
           </p>
         </div>
       </CardContent>
+
+      {/* 個別修改對話框 */}
+      <Dialog open={editDialog.open} onOpenChange={(open) => { if (!open) closeEditDialog(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>修改代課老師</DialogTitle>
+            {editDialog.row && (
+              <DialogDescription>
+                {editDialog.row.timeSlot}・{editDialog.row.class}・{editDialog.row.subject}
+                {editDialog.row.absentTeacher && ` （請假：${editDialog.row.absentTeacher}）`}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* 搜尋框 */}
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1.5 block">搜尋老師</label>
+              <Input
+                placeholder="輸入姓名或簡稱…"
+                value={editDialog.searchQuery}
+                onChange={e => setEditDialog(prev => ({ ...prev, searchQuery: e.target.value }))}
+                className="mb-2"
+              />
+            </div>
+
+            {/* 老師選擇 */}
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1.5 block">選擇代課老師</label>
+              <Select
+                value={editDialog.newTeacher}
+                onValueChange={val => setEditDialog(prev => ({ ...prev, newTeacher: val }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="請選擇代課老師…" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  <SelectItem value="none">
+                    <span className="text-gray-400">無需代課</span>
+                  </SelectItem>
+                  {filteredTeachers.map(t => (
+                    <SelectItem key={t.fullName} value={t.fullName}>
+                      {t.fullName}（{t.shortName}）
+                    </SelectItem>
+                  ))}
+                  {filteredTeachers.length === 0 && editDialog.searchQuery && (
+                    <div className="py-2 px-3 text-sm text-gray-400">找不到符合「{editDialog.searchQuery}」的老師</div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 調課提示 */}
+            {editDialog.row?.isSwap && (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                ⚠ 此行原為調課安排。修改後將改為普通代課，調課備註將被清除。
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeEditDialog}>取消</Button>
+            <Button
+              onClick={handleConfirmEdit}
+              disabled={!editDialog.newTeacher}
+            >
+              確認修改
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
