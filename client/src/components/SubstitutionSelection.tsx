@@ -161,7 +161,7 @@ export default function SubstitutionSelection({
               <span className="text-sm font-semibold text-purple-800">調課建議（優先）</span>
             </div>
             <div className="p-3 space-y-2">
-              {availableSwapCandidates.map((swap, idx) => {
+              {availableSwapCandidates.map((swap: SwapCandidate, idx: number) => {
                 const swapValue = encodeSwapValue(swap);
                 const isSelected = currentValue === swapValue;
                 return (
@@ -259,7 +259,7 @@ export default function SubstitutionSelection({
                   <div className="px-2 py-1.5 text-xs font-semibold text-green-700 bg-green-50">
                     ★ 首選：該班科任老師
                   </div>
-                  {currentSuggestion.priorityTeachers.map((teacher) => {
+                  {currentSuggestion.priorityTeachers.map((teacher: { fullName: string; shortName: string; subject: string }) => {
                     const excluded = isTeacherExcluded(teacher.fullName);
                     return (
                       <SelectItem key={teacher.fullName} value={teacher.fullName} disabled={excluded}>
@@ -279,7 +279,7 @@ export default function SubstitutionSelection({
                   <div className="px-2 py-1.5 text-xs font-semibold text-gray-700 bg-gray-50">
                     次選：其他空堂老師
                   </div>
-                  {currentSuggestion.otherTeachers.map((teacher) => {
+                  {currentSuggestion.otherTeachers.map((teacher: { fullName: string; shortName: string }) => {
                     const excluded = isTeacherExcluded(teacher.fullName);
                     return (
                       <SelectItem key={teacher.fullName} value={teacher.fullName} disabled={excluded}>
