@@ -128,7 +128,12 @@ export async function upsertSubstitutionRecord(
   } else {
     // 創建新記錄
     const result = await db.insert(substitutionRecords).values(record);
-    recordId = (result as unknown as { insertId: number }).insertId;
+    // MySQL Drizzle 回傳 insertId 為 BigInt，需轉換為 number
+    const rawInsertId = (result as unknown as { insertId: number | bigint }).insertId;
+    recordId = Number(rawInsertId);
+    if (!recordId || recordId <= 0) {
+      throw new Error(`Failed to get insertId after creating substitution record (got: ${rawInsertId})`);
+    }
   }
 
   // 寫入新明細
