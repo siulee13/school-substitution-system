@@ -89,6 +89,12 @@ export default function SubstitutionSystem() {
     ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
     : '', [selectedDate]);
 
+  // 查詢選定日期是否已有儲存的代課記錄
+  const { data: existingRecord, isLoading: existingRecordLoading } = trpc.substitution.getRecordByDate.useQuery(
+    { dateStr: localDateStr },
+    { enabled: step === 'input' && !!localDateStr, staleTime: 30000 }
+  );
+
   // 第二步：查詢當前確認老師的課堂
   const currentConfirmTeacher = absentTeachers[confirmationIdx];
   const { data: classesByDate, isLoading: classesLoading } = trpc.substitution.getTeacherClasses.useQuery(
@@ -185,6 +191,26 @@ export default function SubstitutionSystem() {
     return used;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [substitutionTeacherIdx, JSON.stringify(allSelections), allowSwap, multiSuggestions]);
+
+  // 計算当前流程中所有已被選用的代課老師次數（功能二）
+  // 計算對象：前面已完成的老師 + 當前老師已選的堂數
+  const usedTeacherCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!multiSuggestions) return counts;
+    // 計算前面已完成的老師選擇
+    for (let tIdx = 0; tIdx <= substitutionTeacherIdx; tIdx++) {
+      const teacherSelections = allSelections[tIdx] || {};
+      const teacherSuggestions = multiSuggestions[tIdx]?.suggestions || [];
+      for (const [idxStr, value] of Object.entries(teacherSelections)) {
+        const idx = Number(idxStr);
+        const suggestion = teacherSuggestions[idx];
+        if (!suggestion || !value || value === 'none' || value.startsWith('__SWAP__')) continue;
+        counts.set(value, (counts.get(value) ?? 0) + 1);
+      }
+    }
+    return counts;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [substitutionTeacherIdx, JSON.stringify(allSelections), multiSuggestions]);
 
   // 計算已被前面老師佔用的普通代課資源（前端去重）
   // 格式：`${teacherFullName}|||${timeSlot}` —— 同一老師在同一時段不能同時代兩班課
@@ -402,6 +428,24 @@ export default function SubstitutionSystem() {
                 </Popover>
                 <p className="text-xs text-gray-500 mt-1">只能選擇週一至週五（學校工作日）</p>
               </div>
+
+              {/* 已儲存記錄提示 */}
+              {localDateStr && !existingRecordLoading && existingRecord && (
+                <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-300 rounded-lg">
+                  <span className="text-amber-600 text-lg">&#128196;</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-amber-800">
+                      此日期已有儲存的代課記錄（{existingRecord.items.length} 節課）
+                    </p>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      上次儲存时間：{new Date(existingRecord.updatedAt).toLocaleString('zh-HK')}
+                    </p>
+                    <p className="text-xs text-amber-600 mt-1">
+                      如需重新編排，請繼續填寫下方資料并完成後再次按「確認並儲存」即可覆寫。
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* 容許調課選項 */}
               <div>
@@ -703,6 +747,7 @@ export default function SubstitutionSystem() {
               isLoading={isSuggestionsLoading}
               excludedSwapResources={usedSwapResources}
               excludedRegularResources={usedRegularResources}
+              usedTeacherCounts={usedTeacherCounts}
               onConfirm={handleCompleteSubstitutionForTeacher}
               onBack={() => {
                 if (substitutionTeacherIdx > 0) {
@@ -720,6 +765,7 @@ export default function SubstitutionSystem() {
         {step === 'report' && finalReport.length > 0 && (
           <SubstitutionReport
             report={finalReport}
+            dateStr={localDateStr}
             onReset={handleReset}
           />
         )}

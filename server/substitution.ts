@@ -192,6 +192,36 @@ function isSlotInRange(timeSlot: string, startTime?: string, endTime?: string): 
   return slotStart < rangeEnd && slotEnd > rangeStart;
 }
 
+// 有效節數統計時段（只計算這些時段內的課堂）
+const VALID_LESSON_RANGES: Array<{ start: number; end: number }> = [
+  { start: 8 * 60 + 30,  end: 9 * 60 + 40  }, // 8:30–9:40
+  { start: 9 * 60 + 50,  end: 11 * 60 + 0  }, // 9:50–11:00
+  { start: 11 * 60 + 20, end: 13 * 60 + 5  }, // 11:20–13:05
+  { start: 14 * 60 + 0,  end: 15 * 60 + 0  }, // 14:00–15:00
+];
+
+// 判斷某時段是否落在有效節數統計範圍內
+function isSlotInValidRange(timeSlot: string): boolean {
+  const parts = timeSlot.split(/[-－]/);
+  if (parts.length < 2) return false;
+  const slotStart = parseTimeToMinutes(parts[0]);
+  const slotEnd = parseTimeToMinutes(parts[parts.length - 1]);
+  return VALID_LESSON_RANGES.some(r => slotStart >= r.start && slotEnd <= r.end + 5);
+}
+
+// 計算老師當日有效節數（只計算 VALID_LESSON_RANGES 內的課堂）
+export async function getTeacherDailyLessonCount(
+  teacherFullName: string,
+  dayOfWeek: string
+): Promise<number> {
+  try {
+    const classes = await getTeacherClassesByDateRaw(teacherFullName, dayOfWeek);
+    return classes.filter(cls => isSlotInValidRange(cls.timeSlot)).length;
+  } catch {
+    return 0;
+  }
+}
+
 // ─────────────────────────────────────────────
 // 調課偵測邏輯
 // ─────────────────────────────────────────────
@@ -408,10 +438,10 @@ export interface SuggestionItem {
   className: string;
   subject: string;
   /** 優先推薦：科任老師（空堂） */
-  priorityTeachers: Array<{ fullName: string; shortName: string; subject: string }>;
+  priorityTeachers: Array<{ fullName: string; shortName: string; subject: string; dailyLessonCount: number }>;
   /** 其他空堂老師 */
-  otherTeachers: Array<{ fullName: string; shortName: string }>;
-  /** 調課建議（allowSwap=true 時才有值） */
+  otherTeachers: Array<{ fullName: string; shortName: string; dailyLessonCount: number }>;
+  /** 調課建議（allowSwap=true 時才有値） */
   swapCandidates: SwapCandidate[];
 }
 
@@ -450,8 +480,20 @@ export async function generateSuggestions(
       // 獲取該時段空堂老師
       const availableTeachers = await getAvailableTeachersForSlot(dayOfWeek, cls.timeSlot);
 
-      let priorityTeachers: Array<{ fullName: string; shortName: string; subject: string }> = [];
-      let otherTeachers = availableTeachers;
+      // 並行獲取所有空堂老師的當日有效節數
+      const lessonCounts = await Promise.all(
+        availableTeachers.map(t => getTeacherDailyLessonCount(t.fullName, dayOfWeek))
+      );
+      const lessonCountMap = new Map(
+        availableTeachers.map((t, i) => [t.fullName, lessonCounts[i]])
+      );
+
+      let priorityTeachers: Array<{ fullName: string; shortName: string; subject: string; dailyLessonCount: number }> = [];
+      let otherTeachers: Array<{ fullName: string; shortName: string; dailyLessonCount: number }> = availableTeachers.map(t => ({
+        fullName: t.fullName,
+        shortName: t.shortName,
+        dailyLessonCount: lessonCountMap.get(t.fullName) ?? 0,
+      }));
 
       if (cls.className !== 'N/A') {
         const subjectTeachers = await getSubjectTeachersForClassInternal(cls.className);
@@ -463,10 +505,17 @@ export async function generateSuggestions(
             fullName: t.fullName,
             shortName: t.shortName,
             subject: subjectTeacherMap.get(t.fullName)?.subject || 'N/A',
+            dailyLessonCount: lessonCountMap.get(t.fullName) ?? 0,
           }));
 
         const priorityNames = new Set(priorityTeachers.map(pt => pt.fullName));
-        otherTeachers = availableTeachers.filter(t => !priorityNames.has(t.fullName));
+        otherTeachers = availableTeachers
+          .filter(t => !priorityNames.has(t.fullName))
+          .map(t => ({
+            fullName: t.fullName,
+            shortName: t.shortName,
+            dailyLessonCount: lessonCountMap.get(t.fullName) ?? 0,
+          }));
       }
 
       // 本堂的調課建議（只取 absentTeacherTimeSlot 對應本堂的候選）

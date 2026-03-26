@@ -22,8 +22,8 @@ interface SuggestionItem {
   timeSlot: string;
   className: string;
   subject: string;
-  priorityTeachers: Array<{ fullName: string; shortName: string; subject: string }>;
-  otherTeachers: Array<{ fullName: string; shortName: string }>;
+  priorityTeachers: Array<{ fullName: string; shortName: string; subject: string; dailyLessonCount: number }>;
+  otherTeachers: Array<{ fullName: string; shortName: string; dailyLessonCount: number }>;
   swapCandidates: SwapCandidate[];
 }
 
@@ -34,6 +34,7 @@ interface SubstitutionSelectionProps {
   isLoading: boolean;
   excludedSwapResources?: Set<string>; // 已被前一位老師佔用的調課資源，格式：`${swapTeacherFullName}|||${swapTeacherTimeSlot}`
   excludedRegularResources?: Set<string>; // 已被前一位老師佔用的普通代課資源，格式：`${teacherFullName}|||${timeSlot}`
+  usedTeacherCounts?: Map<string, number>; // 当前流程中已代課的次數，格式： teacherFullName -> 次數
   onConfirm: (selections: Record<number, string>) => void;
   onBack: () => void;
 }
@@ -64,6 +65,7 @@ export default function SubstitutionSelection({
   isLoading,
   excludedSwapResources,
   excludedRegularResources,
+  usedTeacherCounts,
   onConfirm,
   onBack,
 }: SubstitutionSelectionProps) {
@@ -126,6 +128,20 @@ export default function SubstitutionSelection({
   const isTeacherExcluded = (teacherFullName: string) => {
     if (!excludedRegularResources) return false;
     return excludedRegularResources.has(`${teacherFullName}|||${currentSuggestion.timeSlot}`);
+  };
+
+  // 獲取老師已代課次數（功能二）
+  const getUsedCount = (teacherFullName: string): number => {
+    return usedTeacherCounts?.get(teacherFullName) ?? 0;
+  };
+
+  // 生成老師顯示文字（包含節數和已代課標示）
+  const formatTeacherLabel = (fullName: string, shortName: string, dailyLessonCount: number, extra?: string): string => {
+    const lessonStr = `${dailyLessonCount}堂`;
+    const usedCount = getUsedCount(fullName);
+    const usedStr = usedCount > 0 ? ` ⚠已代${usedCount}堂` : '';
+    const extraStr = extra ? ` — ${extra}` : '';
+    return `${fullName} (${shortName}) [${lessonStr}${usedStr}]${extraStr}`;
   };
 
   return (
@@ -265,7 +281,7 @@ export default function SubstitutionSelection({
                       <SelectItem key={teacher.fullName} value={teacher.fullName} disabled={excluded}>
                         {excluded
                           ? `${teacher.fullName} (${teacher.shortName}) — ${teacher.subject} 【此時段已被佔用】`
-                          : `${teacher.fullName} (${teacher.shortName}) — ${teacher.subject}`
+                          : formatTeacherLabel(teacher.fullName, teacher.shortName, teacher.dailyLessonCount, teacher.subject)
                         }
                       </SelectItem>
                     );
@@ -285,7 +301,7 @@ export default function SubstitutionSelection({
                       <SelectItem key={teacher.fullName} value={teacher.fullName} disabled={excluded}>
                         {excluded
                           ? `${teacher.fullName} (${teacher.shortName}) 【此時段已被佔用】`
-                          : `${teacher.fullName} (${teacher.shortName})`
+                          : formatTeacherLabel(teacher.fullName, teacher.shortName, teacher.dailyLessonCount)
                         }
                       </SelectItem>
                     );

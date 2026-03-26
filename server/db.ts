@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, InsertSubstitutionRecord, InsertSubstitutionRecordItem, substitutionRecordItems, substitutionRecords, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,63 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// ====== 代課記錄 CRUD ======
+
+/** 查詢指定日期的代課記錄（包含明細） */
+export async function getSubstitutionRecordByDate(dateStr: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const records = await db.select().from(substitutionRecords).where(eq(substitutionRecords.dateStr, dateStr)).limit(1);
+  if (records.length === 0) return null;
+  const record = records[0];
+  const items = await db.select().from(substitutionRecordItems)
+    .where(eq(substitutionRecordItems.recordId, record.id))
+    .orderBy(substitutionRecordItems.sortOrder);
+  return { ...record, items };
+}
+
+/** 儲存或更新代課記錄（先刪除舊明細，再寫入新明細） */
+export async function upsertSubstitutionRecord(
+  record: InsertSubstitutionRecord,
+  items: InsertSubstitutionRecordItem[]
+) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+
+  // 查詢是否已有記錄
+  const existing = await db.select().from(substitutionRecords)
+    .where(eq(substitutionRecords.dateStr, record.dateStr)).limit(1);
+
+  let recordId: number;
+  if (existing.length > 0) {
+    recordId = existing[0].id;
+    // 更新記錄
+    await db.update(substitutionRecords)
+      .set({ note: record.note, updatedAt: new Date() })
+      .where(eq(substitutionRecords.id, recordId));
+    // 刪除舊明細
+    await db.delete(substitutionRecordItems).where(eq(substitutionRecordItems.recordId, recordId));
+  } else {
+    // 創建新記錄
+    const result = await db.insert(substitutionRecords).values(record);
+    recordId = (result as unknown as { insertId: number }).insertId;
+  }
+
+  // 寫入新明細
+  if (items.length > 0) {
+    await db.insert(substitutionRecordItems).values(
+      items.map((item, idx) => ({ ...item, recordId, sortOrder: idx }))
+    );
+  }
+
+  return recordId;
+}
+
+/** 列出最近的代課記錄（不含明細） */
+export async function listSubstitutionRecords(limit = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(substitutionRecords)
+    .orderBy(substitutionRecords.dateStr)
+    .limit(limit);
+}

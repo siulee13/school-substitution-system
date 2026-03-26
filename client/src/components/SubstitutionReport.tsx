@@ -1,7 +1,9 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CheckCircle, Download, RotateCcw, ArrowLeftRight } from 'lucide-react';
+import { CheckCircle, Download, RotateCcw, ArrowLeftRight, Save, CheckCheck } from 'lucide-react';
+import { useState } from 'react';
+import { trpc } from '@/lib/trpc';
 
 export interface ReportRow {
   timeSlot: string;
@@ -18,14 +20,37 @@ export interface ReportRow {
 
 interface SubstitutionReportProps {
   report: ReportRow[];
+  dateStr: string; // YYYY-MM-DD 格式
   onReset: () => void;
 }
 
-export default function SubstitutionReport({ report, onReset }: SubstitutionReportProps) {
+export default function SubstitutionReport({ report, dateStr, onReset }: SubstitutionReportProps) {
   const swapCount = report.filter(r => r.isSwap).length;
   const normalCount = report.filter(r => !r.isSwap && r.substitutionTeacher !== '無需代課').length;
-
   const hasMultiTeacher = report.some(r => r.absentTeacher);
+
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  const saveRecord = trpc.substitution.saveRecord.useMutation({
+    onSuccess: () => setSaveStatus('saved'),
+    onError: () => setSaveStatus('error'),
+  });
+
+  const handleSave = async () => {
+    setSaveStatus('saving');
+    await saveRecord.mutateAsync({
+      dateStr,
+      items: report.map(row => ({
+        absentTeacher: row.absentTeacher || '',
+        timeSlot: row.timeSlot,
+        className: row.class,
+        subject: row.subject,
+        substitutionTeacher: row.substitutionTeacher,
+        isSwap: row.isSwap ? 1 : 0,
+        swapNote: row.swapNote,
+      })),
+    });
+  };
 
   const handleDownload = () => {
     const headers = hasMultiTeacher
@@ -148,7 +173,21 @@ export default function SubstitutionReport({ report, onReset }: SubstitutionRepo
             <Download className="mr-2 h-4 w-4" />
             下載報告 (CSV)
           </Button>
-          <Button onClick={onReset} className="flex-1">
+          <Button
+            onClick={handleSave}
+            disabled={saveStatus === 'saving' || saveStatus === 'saved'}
+            variant={saveStatus === 'saved' ? 'outline' : 'default'}
+            className={`flex-1 ${
+              saveStatus === 'saved' ? 'border-green-500 text-green-600' :
+              saveStatus === 'error' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
+            }`}
+          >
+            {saveStatus === 'saving' && <>儲存中…</>}
+            {saveStatus === 'saved' && <><CheckCheck className="mr-2 h-4 w-4" />已儲存至資料庫</>}
+            {saveStatus === 'error' && <>儲存失敗，請重試</>}
+            {saveStatus === 'idle' && <><Save className="mr-2 h-4 w-4" />確認並儲存</>}
+          </Button>
+          <Button onClick={onReset} variant="outline" className="flex-1">
             <RotateCcw className="mr-2 h-4 w-4" />
             編排新的代課
           </Button>

@@ -8,6 +8,13 @@
       "when": 1774165640411,
       "tag": "0000_jittery_multiple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1774532961015,
+      "tag": "0001_faulty_nextwave",
+      "breakpoints": true
     }
   ]
 }

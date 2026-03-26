@@ -9,6 +9,11 @@ import {
   getSubjectTeachersForClass,
   generateSuggestions,
 } from "./substitution";
+import {
+  getSubstitutionRecordByDate,
+  upsertSubstitutionRecord,
+  listSubstitutionRecords,
+} from "./db";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -104,6 +109,46 @@ export const appRouter = router({
         );
 
         return results;
+      }),
+
+    // 查詢指定日期的代課記錄
+    getRecordByDate: publicProcedure
+      .input(z.object({ dateStr: z.string() }))
+      .query(async ({ input }) => {
+        return await getSubstitutionRecordByDate(input.dateStr);
+      }),
+
+    // 列出最近的代課記錄
+    listRecords: publicProcedure
+      .query(async () => {
+        return await listSubstitutionRecords(60);
+      }),
+
+    // 儲存或更新代課記錄
+    saveRecord: publicProcedure
+      .input(z.object({
+        dateStr: z.string(),
+        note: z.string().optional(),
+        items: z.array(z.object({
+          absentTeacher: z.string(),
+          timeSlot: z.string(),
+          className: z.string(),
+          subject: z.string(),
+          substitutionTeacher: z.string(),
+          isSwap: z.number().default(0),
+          swapNote: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ input }) => {
+        const recordId = await upsertSubstitutionRecord(
+          { dateStr: input.dateStr, note: input.note },
+          input.items.map((item, idx) => ({
+            ...item,
+            recordId: 0, // 將由 upsertSubstitutionRecord 內部覆寫
+            sortOrder: idx,
+          }))
+        );
+        return { success: true, recordId };
       }),
   }),
 });
