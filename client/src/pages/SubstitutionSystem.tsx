@@ -83,7 +83,7 @@ export default function SubstitutionSystem() {
   const [allSelections, setAllSelections] = useState<Record<number, Record<number, string>>>({});
 
   // 查詢所有老師
-  const { data: teachers = [], isLoading: teachersLoading } = trpc.substitution.getAllTeachers.useQuery();
+  const { data: teachers = [], isLoading: teachersLoading, isFetching: teachersFetching, isError: teachersError, refetch: refetchTeachers } = trpc.substitution.getAllTeachers.useQuery();
 
   const localDateStr = useMemo(() => selectedDate
     ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
@@ -527,7 +527,7 @@ export default function SubstitutionSystem() {
                       </div>
 
                       {/* 老師選擇 */}
-                      {teachersLoading ? (
+                      {(teachersLoading || (teachersFetching && teachers.length === 0)) ? (
                         <div className="flex items-center py-2">
                           <Loader2 className="h-4 w-4 animate-spin text-blue-600 mr-2" />
                           <span className="text-sm text-gray-600">載入老師列表中...</span>
@@ -555,9 +555,19 @@ export default function SubstitutionSystem() {
                             </div>
                             {/* 老師列表 */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
-                              {filteredTeachers.length === 0 ? (
+                              {teachersError ? (
+                                <div className="col-span-2 py-4 text-center text-sm text-red-400">
+                                  <p>載入老師列表失敗</p>
+                                  <button onClick={() => refetchTeachers()} className="mt-1 text-xs text-blue-500 underline">重試</button>
+                                </div>
+                              ) : filteredTeachers.length === 0 && (teacherSearchMap[entry.id] || '').trim() ? (
                                 <div className="col-span-2 py-4 text-center text-sm text-gray-400">
                                   找不到符合「{teacherSearchMap[entry.id]}」的老師
+                                </div>
+                              ) : filteredTeachers.length === 0 ? (
+                                <div className="col-span-2 py-4 text-center text-sm text-gray-400">
+                                  <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1 text-blue-400" />
+                                  載入中…
                                 </div>
                               ) : (
                                 filteredTeachers.map((teacher) => (
