@@ -4,7 +4,9 @@ import path from 'path';
 import initSqlJs from 'sql.js/dist/sql-asm.js';
 type SqlJsDatabase = any;
 
-const dbDir = path.join(process.cwd(), '..');
+// In both dev (tsx watch from project root) and production (node dist/index.js from /app),
+// process.cwd() points to the project root where timetable.db resides.
+const dbDir = process.cwd();
 
 let teacherDb: SqlJsDatabase | null = null;
 let sqlJs: any = null;

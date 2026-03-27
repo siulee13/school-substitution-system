@@ -101,3 +101,9 @@
   - [x] 前端：選擇日期時自動檢查是否有已儲存記錄並提示
   - [x] 前端：已儲存記錄可覆寫更新
 - [x] 最終報告每行加入個別修改功能（修改按鈕 + 彈出對話框選擇新代課老師）
+
+## Bug 修復：Production 環境老師列表為空（2026-03-27）
+- [x] 診斷根本原因：server/substitution.ts 中 dbDir = process.cwd() + '..' 在 production 環境指向錯誤路徑
+- [x] 修復：改為 dbDir = process.cwd()，在 dev 和 production 環境中均指向項目根目錄
+- [x] 確認 timetable.db 和 subject_teacher_mappings.json 已在項目根目錄
+- [x] 重新建構 production 版本並驗證修復
