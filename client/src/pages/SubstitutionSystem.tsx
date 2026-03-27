@@ -566,8 +566,8 @@ export default function SubstitutionSystem() {
                                 </div>
                               ) : filteredTeachers.length === 0 ? (
                                 <div className="col-span-2 py-4 text-center text-sm text-gray-400">
-                                  <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1 text-blue-400" />
-                                  載入中…
+                                  <p>沒有老師資料</p>
+                                  <button onClick={() => refetchTeachers()} className="mt-1 text-xs text-blue-500 underline">重新載入</button>
                                 </div>
                               ) : (
                                 filteredTeachers.map((teacher) => (
