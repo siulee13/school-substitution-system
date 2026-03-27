@@ -144,6 +144,23 @@ export default function SubstitutionSelection({
     return `${fullName} (${shortName}) [${lessonStr}${usedStr}]${extraStr}`;
   };
 
+  // 生成老師顯示的 JSX（已代課老師顯示橙色警示）
+  const renderTeacherOption = (fullName: string, shortName: string, dailyLessonCount: number, extra?: string) => {
+    const usedCount = getUsedCount(fullName);
+    const isUsed = usedCount > 0;
+    return (
+      <span className={isUsed ? 'text-orange-700 font-semibold' : ''}>
+        {fullName} ({shortName}) [{dailyLessonCount}堂{isUsed ? ` ⚠已代${usedCount}堂` : ''}]
+        {extra && <span className="text-gray-500"> — {extra}</span>}
+        {isUsed && (
+          <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-xs font-bold bg-orange-100 text-orange-700 border border-orange-300">
+            ×{usedCount}
+          </span>
+        )}
+      </span>
+    );
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -281,7 +298,7 @@ export default function SubstitutionSelection({
                       <SelectItem key={teacher.fullName} value={teacher.fullName} disabled={excluded}>
                         {excluded
                           ? `${teacher.fullName} (${teacher.shortName}) — ${teacher.subject} 【此時段已被佔用】`
-                          : formatTeacherLabel(teacher.fullName, teacher.shortName, teacher.dailyLessonCount, teacher.subject)
+                          : renderTeacherOption(teacher.fullName, teacher.shortName, teacher.dailyLessonCount, teacher.subject)
                         }
                       </SelectItem>
                     );
@@ -303,7 +320,7 @@ export default function SubstitutionSelection({
                       <SelectItem key={teacher.fullName} value={teacher.fullName} disabled={excluded}>
                         {excluded
                           ? `${teacher.fullName} (${teacher.shortName}) 【此時段已被佔用】`
-                          : formatTeacherLabel(teacher.fullName, teacher.shortName, teacher.dailyLessonCount)
+                          : renderTeacherOption(teacher.fullName, teacher.shortName, teacher.dailyLessonCount)
                         }
                       </SelectItem>
                     );
