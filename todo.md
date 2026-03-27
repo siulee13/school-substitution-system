@@ -107,3 +107,5 @@
 - [x] 修復：改為 dbDir = process.cwd()，在 dev 和 production 環境中均指向項目根目錄
 - [x] 確認 timetable.db 和 subject_teacher_mappings.json 已在項目根目錄
 - [x] 重新建構 production 版本並驗證修復
+- [x] 真正根本原因：timetable.db 被 .gitignore 的 *.db 規則排除，production 環境沒有此文件
+- [x] 修復：在 .gitignore 加入 !timetable.db 例外規則，並用 git add -f 強制追蹤此文件
