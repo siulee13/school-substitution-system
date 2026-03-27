@@ -41,6 +41,17 @@ export default function SubstitutionReport({ report, dateStr, onReset, onUpdateR
   const normalCount = report.filter(r => !r.isSwap && r.substitutionTeacher !== '無需代課').length;
   const hasMultiTeacher = report.some(r => r.absentTeacher);
 
+  // 計算每位代課老師在當日被分配的次數（排除「無需代課」）
+  const substitutionCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of report) {
+      if (row.substitutionTeacher && row.substitutionTeacher !== '無需代課') {
+        map.set(row.substitutionTeacher, (map.get(row.substitutionTeacher) ?? 0) + 1);
+      }
+    }
+    return map;
+  }, [report]);
+
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   // 修改對話框狀態
@@ -190,16 +201,40 @@ export default function SubstitutionReport({ report, dateStr, onReset, onUpdateR
                 <TableCell className="text-center">{row.class}</TableCell>
                 <TableCell className="text-center">{row.subject}</TableCell>
                 <TableCell className="text-center">
-                  {row.isSwap ? (
-                    <span className="inline-flex items-center gap-1 font-semibold text-purple-700">
-                      <ArrowLeftRight className="h-3.5 w-3.5" />
-                      {row.substitutionTeacher}
-                    </span>
-                  ) : (
-                    <span className={`font-semibold ${row.substitutionTeacher === '無需代課' ? 'text-gray-400' : 'text-blue-600'}`}>
-                      {row.substitutionTeacher}
-                    </span>
-                  )}
+                  {(() => {
+                    const count = substitutionCountMap.get(row.substitutionTeacher) ?? 0;
+                    const isMulti = count > 1;
+                    if (row.isSwap) {
+                      return (
+                        <span className={`inline-flex items-center gap-1 font-semibold ${
+                          isMulti ? 'text-orange-700' : 'text-purple-700'
+                        }`}>
+                          <ArrowLeftRight className="h-3.5 w-3.5" />
+                          {row.substitutionTeacher}
+                          {isMulti && (
+                            <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-orange-100 text-orange-700 border border-orange-300">
+                              ×{count}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    }
+                    if (row.substitutionTeacher === '無需代課') {
+                      return <span className="font-semibold text-gray-400">{row.substitutionTeacher}</span>;
+                    }
+                    return (
+                      <span className={`inline-flex items-center gap-1 font-semibold ${
+                        isMulti ? 'text-orange-700' : 'text-blue-600'
+                      }`}>
+                        {row.substitutionTeacher}
+                        {isMulti && (
+                          <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-orange-100 text-orange-700 border border-orange-300">
+                            ×{count}
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })()}
                 </TableCell>
                 <TableCell className="text-center text-xs text-gray-500">
                   {row.isSwap ? (

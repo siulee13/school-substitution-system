@@ -295,7 +295,9 @@ export default function SubstitutionSelection({
                   <div className="px-2 py-1.5 text-xs font-semibold text-gray-700 bg-gray-50">
                     次選：其他空堂老師
                   </div>
-                  {currentSuggestion.otherTeachers.map((teacher) => {
+                  {[...currentSuggestion.otherTeachers]
+                    .sort((a, b) => a.dailyLessonCount - b.dailyLessonCount)
+                    .map((teacher) => {
                     const excluded = isTeacherExcluded(teacher.fullName);
                     return (
                       <SelectItem key={teacher.fullName} value={teacher.fullName} disabled={excluded}>

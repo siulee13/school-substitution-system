@@ -109,3 +109,7 @@
 - [x] 重新建構 production 版本並驗證修復
 - [x] 真正根本原因：timetable.db 被 .gitignore 的 *.db 規則排除，production 環境沒有此文件
 - [x] 修復：在 .gitignore 加入 !timetable.db 例外規則，並用 git add -f 強制追蹤此文件
+
+## 新功能（2026-03-27）：報告 highlight 及排序
+- [x] 最終代課報告：同一日代超過一堂的老師加上 highlight（標示 ×堆數 + 橙色）
+- [x] 代課選取列表：「其他空堂老師」部分按當日堂數由少至多排序
